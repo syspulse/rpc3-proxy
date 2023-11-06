@@ -24,6 +24,8 @@ import akka.http.scaladsl.model.HttpMethods
 import akka.http.scaladsl.model.StatusCodes
 
 import io.syspulse.rpc3.Config
+import akka.http.scaladsl.model.HttpEntity
+import akka.http.scaladsl.model.ContentTypes
 
 class ProxyStoreRcp(rpcUri:String="")(implicit config:Config) extends ProxyStore {
   val log = Logger(s"${this}")
@@ -39,10 +41,10 @@ class ProxyStoreRcp(rpcUri:String="")(implicit config:Config) extends ProxyStore
     log.info(s"req='${req}'")
 
     val response = if(req.trim.startsWith("{")) {
-      req.parseJson.convertTo[ProxyRpcReq]
+      //req.parseJson.convertTo[ProxyRpcReq]
 
       val rsp = Http()
-        .singleRequest(HttpRequest(HttpMethods.POST,uri))
+        .singleRequest(HttpRequest(HttpMethods.POST,uri, entity = HttpEntity(ContentTypes.`application/json`,req)))
         .flatMap(res => { 
           res.status match {
             case StatusCodes.OK => 
