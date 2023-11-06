@@ -39,7 +39,7 @@ class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) e
 
   val uri = if(rpcUri.isEmpty()) config.rpcUri else rpcUri
   
-  def parseReq(req:String):Try[ProxyRpcReq] = { 
+  def parseSingleReq(req:String):Try[ProxyRpcReq] = { 
     try {
       Success(req.parseJson.convertTo[ProxyRpcReq])
     } catch {
@@ -47,51 +47,178 @@ class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) e
     }      
   }
 
+  def parseBatchReq(req:String):Try[Array[ProxyRpcReq]] = { 
+    try {
+      Success(req.parseJson.convertTo[Array[ProxyRpcReq]])
+    } catch {
+      case e:Exception => Failure(e)        
+    }      
+  }
+
+  // parse reponse as Array of strings
+  def parseBatchRawRes(req:String):Try[Array[String]] = { 
+    try {
+      Success(req.parseJson.convertTo[Array[String]])
+    } catch {
+      case e:Exception => Failure(e)        
+    }      
+  }
+
+  def single(req:String) = {
+    parseSingleReq(req) match {
+      case Success(r) =>         
+        //(r.method,r.params,r.id)
+        r
+      case Failure(e) => 
+        log.warn(s"failed to parse: ${e}")
+        ProxyRpcReq("2.0","",List(),0)
+    }    
+  }
+
+  def batch(req:String) = {
+    parseBatchReq(req) match {
+      case Success(r) =>         
+        r
+      case Failure(e) => 
+        log.warn(s"failed to parse: ${e}")
+        Array[ProxyRpcReq]()
+    } 
+  }
+
+  def getKey(r:ProxyRpcReq) = {
+    s"${r.method}-${r.params.toString}"
+  }
+
+  def proxy(req:String) = {
+    Http()
+      .singleRequest(HttpRequest(HttpMethods.POST,uri, entity = HttpEntity(ContentTypes.`application/json`,req)))
+      .flatMap(res => { 
+        res.status match {
+          case StatusCodes.OK => 
+            val body = res.entity.dataBytes.runReduce(_ ++ _)
+            body.map(_.utf8String)
+          case _ => 
+            val body = res.entity.dataBytes.runReduce(_ ++ _)
+            body.map(_.utf8String)
+        }
+      })
+  }
+
+  def batchOptimized(req:String) = {
+    val rr = batch(req)
+        
+    // prepare array for response with Cached and UnCached
+    val rspAll = rr.map( r => {
+      val key = getKey(r)
+      cache.find(key) match {
+        case Some(rsp) => r -> Some(rsp)
+        case None => r -> None
+      }
+    })
+
+    // get only UnCached
+    val rspUnCached = rspAll.filter(r => ! r._2.isDefined)
+    // prepare requests only for uncached
+    val reqUnCached = rspUnCached.map(r => r._1.toJson.compactPrint)
+    
+    // prepare only request
+    val reqRpc = "[" + reqUnCached.mkString(",") + "]"
+
+    // call request
+    val rspRpc = proxy(reqRpc)            
+    
+    // save to cache and other manipulations
+    for {
+      rsp <- rspRpc
+      raw <- {
+        val rspParsed = parseBatchRawRes(rsp)
+        val raw = rspParsed match {
+          case Success(r) => 
+            r
+          case f @ Failure(e) => 
+            log.error(s"failed to parse Rpc response: ${e}")
+            Array[String]()
+        }
+        Future(raw)
+      }
+      all <- {
+        var i = -1
+        val all = rspAll.map( r => {
+          if(r._2.isDefined) r._2.get
+          else {
+            i = i + 1
+            raw(i)          
+          }
+        })
+        Future(all)
+      }
+      _ <- {
+        var i = -1
+        rspUnCached.foreach( r => {
+          val key = getKey(r._1)
+          i = i + 1
+          cache.cache(key,raw(i))
+        })
+        Future(all)
+      }
+      rspClient <- {
+        Future {
+          "[" + all.mkString(",") + "]"
+        }
+      }
+    } yield rspClient
+  }
+
+  def batchCached(req:String) = {
+    val rr = batch(req)    
+    val key = rr.map(r => getKey(r)).mkString("_")
+
+    val rsp = cache.find(key) match {
+      case None => proxy(req)          
+      case Some(rsp) => Future(rsp)
+    }
+
+    // save to cache and other manipulations
+    for {
+      r0 <- rsp
+      _ <- Future(cache.cache(key,r0))
+    } yield r0
+  }
+
+  def singleCached(req:String) = {
+    val r = single(req)
+    val key = getKey(r)
+
+    val rsp = cache.find(key) match {
+      case None => proxy(req)          
+      case Some(rsp) => Future(rsp)
+    }
+
+    // save to cache and other manipulations
+    for {
+      r0 <- rsp
+      _ <- Future(cache.cache(key,r0))
+    } yield r0
+  }
 
   def rpc(req:String) = {
     log.info(s"req='${req}'")
 
-    val response = if(req.trim.startsWith("{")) {
-      //req.parseJson.convertTo[ProxyRpcReq]
-            
-      val (method,params,id) = parseReq(req) match {
-        case Success(r) => (r.method,r.params,r.id)
-        case Failure(e) => 
-          log.warn(s"failed to parse: ${e}")
-          ("",Seq(),0)
-      }
+    val response = req.trim match {
 
-      val key = s"${method}-${params.toString}"
+      // single request
+      case req if(req.startsWith("{")) => 
+        singleCached(req)        
       
-      val rsp = cache.find(key) match {
-        case None => 
-          Http()
-            .singleRequest(HttpRequest(HttpMethods.POST,uri, entity = HttpEntity(ContentTypes.`application/json`,req)))
-            .flatMap(res => { 
-              res.status match {
-                case StatusCodes.OK => 
-                  val body = res.entity.dataBytes.runReduce(_ ++ _)
-                  body.map(_.utf8String)
-                case _ => 
-                  val body = res.entity.dataBytes.runReduce(_ ++ _)
-                  body.map(_.utf8String)
-              }
-            })
-
-        case Some(rsp) => Future(rsp)
-      }
-
-      // save to cache and other manipulations
-      for {
-        r0 <- rsp
-        _ <- Future(cache.cache(key,r0))
-      } yield r0
-            
-      
-    } else {
-      Future {
-        s"""{"jsonrpc": "2.0", "error": {"code": -32601, "message": "Emtpy message"}, "id": 0}"""
-      }
+      // batch
+      case req if(req.startsWith("[")) => 
+        //batchOptimized(req)
+        batchCached(req)
+        
+      case _ => 
+        Future {
+          s"""{"jsonrpc": "2.0", "error": {"code": -32601, "message": "Emtpy message"}, "id": 0}"""
+        }
     }
 
     response 
