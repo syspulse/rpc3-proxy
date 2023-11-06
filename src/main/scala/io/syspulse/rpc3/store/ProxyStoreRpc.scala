@@ -26,8 +26,9 @@ import akka.http.scaladsl.model.StatusCodes
 import io.syspulse.rpc3.Config
 import akka.http.scaladsl.model.HttpEntity
 import akka.http.scaladsl.model.ContentTypes
+import io.syspulse.rpc3.cache.ProxyCache
 
-class ProxyStoreRcp(rpcUri:String="")(implicit config:Config) extends ProxyStore {
+class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) extends ProxyStore {
   val log = Logger(s"${this}")
   
   implicit val ec: scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.global
@@ -42,21 +43,31 @@ class ProxyStoreRcp(rpcUri:String="")(implicit config:Config) extends ProxyStore
 
     val response = if(req.trim.startsWith("{")) {
       //req.parseJson.convertTo[ProxyRpcReq]
+      
+      val rsp = cache.find(req) match {
+        case None => 
+          Http()
+            .singleRequest(HttpRequest(HttpMethods.POST,uri, entity = HttpEntity(ContentTypes.`application/json`,req)))
+            .flatMap(res => { 
+              res.status match {
+                case StatusCodes.OK => 
+                  val body = res.entity.dataBytes.runReduce(_ ++ _)
+                  body.map(_.utf8String)
+                case _ => 
+                  val body = res.entity.dataBytes.runReduce(_ ++ _)
+                  body.map(_.utf8String)
+              }
+            })
 
-      val rsp = Http()
-        .singleRequest(HttpRequest(HttpMethods.POST,uri, entity = HttpEntity(ContentTypes.`application/json`,req)))
-        .flatMap(res => { 
-          res.status match {
-            case StatusCodes.OK => 
-              val body = res.entity.dataBytes.runReduce(_ ++ _)
-              body.map(_.utf8String)
-            case _ => 
-              val body = res.entity.dataBytes.runReduce(_ ++ _)
-              body.map(_.utf8String)
-          }
-        })
+        case Some(rsp) => Future(rsp)
+      }
 
-      rsp
+      // save to cache and other manipulations
+      for {
+        r0 <- rsp
+        _ <- Future(cache.cache(req,r0))
+      } yield r0
+            
       
     } else {
       Future {

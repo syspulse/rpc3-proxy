@@ -10,6 +10,7 @@ import io.syspulse.skel.config._
 
 import io.syspulse.rpc3._
 import io.syspulse.rpc3.store._
+import io.syspulse.rpc3.cache._
 import io.syspulse.rpc3.server.ProxyRoutes
 
 import io.jvm.uuid._
@@ -24,6 +25,7 @@ case class Config(
   uri:String = "/api/v1/rpc3",
 
   datastore:String = "none://",
+  cache:String = "time://",
 
   timeout:Long = 3000L,
 
@@ -48,7 +50,9 @@ object App extends skel.Server {
         ArgInt('p', "http.port",s"listern port (def: ${d.port})"),
         ArgString('u', "http.uri",s"api uri (def: ${d.uri})"),
 
-        ArgString('d', "datastore",s"datastore [none,rpc] (def: ${d.datastore})"),
+        ArgString('d', "datastore",s"Datastore [none://,rpc://] (def: ${d.datastore})"),
+        ArgString('c', "cache",s"Cache [none,time://] (def: ${d.cache})"),
+        
         ArgString('_', "timeout",s"Timeouts, msec (def: ${d.timeout})"),
 
         ArgString('_', "rpc.uri",s"RPC uri (def: ${d.rpcUri})"),
@@ -66,6 +70,8 @@ object App extends skel.Server {
       uri = c.getString("http.uri").getOrElse(d.uri),
       
       datastore = c.getString("datastore").getOrElse(d.datastore),
+      cache = c.getString("cache").getOrElse(d.cache),
+      
       timeout = c.getLong("timeout").getOrElse(d.timeout),
 
       rpcUri = c.getString("rpc.uri").getOrElse(d.rpcUri),
@@ -76,21 +82,33 @@ object App extends skel.Server {
 
     Console.err.println(s"Config: ${config}")
     
+    implicit val cache = config.cache.split("://").toList match {      
+      case "time" :: time :: _ => new ProxyCacheTime(time.toLong)
+      case "time" :: Nil => new ProxyCacheTime()
+      case "none" :: Nil => new ProxyCacheNone()
+      case _ => {
+        Console.err.println(s"Uknown datastore: '${config.datastore}'")
+        sys.exit(1)
+      }
+    }
+
+    val store = config.datastore.split("://").toList match {          
+      //case "dir" :: dir ::  _ => new ProxyStoreDir(dir)
+      case "rpc" :: Nil => new ProxyStoreRcp()
+      case "rpc" :: uri => new ProxyStoreRcp(uri.mkString("://"))
+      case "http" :: _ => new ProxyStoreRcp(config.datastore)
+      case "https" :: _ => new ProxyStoreRcp(config.datastore)
+
+      case "none" :: Nil => new ProxyStoreNone()
+      case _ => {
+        Console.err.println(s"Uknown datastore: '${config.datastore}'")
+        sys.exit(1)
+      }
+    }    
+
     config.cmd match {
       case "server" => 
-        val store = config.datastore.split("://").toList match {          
-          //case "dir" :: dir ::  _ => new ProxyStoreDir(dir)
-          case "rpc" :: Nil => new ProxyStoreRcp()
-          case "rpc" :: uri => new ProxyStoreRcp(uri.mkString("://"))
-          case "http" :: _ => new ProxyStoreRcp(config.datastore)
-          case "https" :: _ => new ProxyStoreRcp(config.datastore)
-          
-          case "none" :: Nil => new ProxyStoreNone()
-          case _ => {
-            Console.err.println(s"Uknown datastore: '${config.datastore}'")
-            sys.exit(1)
-          }
-        }
+        
         
         run( config.host, config.port,config.uri,c,
           Seq(
