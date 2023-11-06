@@ -26,6 +26,7 @@ import akka.http.scaladsl.model.StatusCodes
 import io.syspulse.rpc3.Config
 import akka.http.scaladsl.model.HttpEntity
 import akka.http.scaladsl.model.ContentTypes
+
 import io.syspulse.rpc3.cache.ProxyCache
 
 class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) extends ProxyStore {
@@ -38,13 +39,31 @@ class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) e
 
   val uri = if(rpcUri.isEmpty()) config.rpcUri else rpcUri
   
+  def parseReq(req:String):Try[ProxyRpcReq] = { 
+    try {
+      Success(req.parseJson.convertTo[ProxyRpcReq])
+    } catch {
+      case e:Exception => Failure(e)        
+    }      
+  }
+
+
   def rpc(req:String) = {
     log.info(s"req='${req}'")
 
     val response = if(req.trim.startsWith("{")) {
       //req.parseJson.convertTo[ProxyRpcReq]
+            
+      val (method,params,id) = parseReq(req) match {
+        case Success(r) => (r.method,r.params,r.id)
+        case Failure(e) => 
+          log.warn(s"failed to parse: ${e}")
+          ("",Seq(),0)
+      }
+
+      val key = s"${method}-${params.toString}"
       
-      val rsp = cache.find(req) match {
+      val rsp = cache.find(key) match {
         case None => 
           Http()
             .singleRequest(HttpRequest(HttpMethods.POST,uri, entity = HttpEntity(ContentTypes.`application/json`,req)))
@@ -65,7 +84,7 @@ class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) e
       // save to cache and other manipulations
       for {
         r0 <- rsp
-        _ <- Future(cache.cache(req,r0))
+        _ <- Future(cache.cache(key,r0))
       } yield r0
             
       

@@ -11,8 +11,8 @@ import io.jvm.uuid._
 
 class ProxyCacheNone() extends ProxyCache {
   
-  def find(req:String):Option[String] = None
+  def find(key:String):Option[String] = None
 
-  def cache(req:String,rsp:String):String = rsp
+  def cache(key:String,rsp:String):String = rsp
 }
 
