@@ -55,6 +55,7 @@ import io.syspulse.rpc3._
 import io.syspulse.rpc3.store.ProxyRegistry
 import io.syspulse.rpc3.store.ProxyRegistry._
 import io.syspulse.rpc3.server._
+import io.syspulse.skel.service.telemetry.TelemetryRegistry
 
 @Path("/")
 class ProxyRoutes(registry: ActorRef[Command])(implicit context: ActorContext[_],config:Config) extends CommonRoutes with Routeable {
@@ -67,11 +68,10 @@ class ProxyRoutes(registry: ActorRef[Command])(implicit context: ActorContext[_]
   import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
   import ProxyJson._
   
-  val cr = new CollectorRegistry(true);
-  val metricGetCount: Counter = Counter.build().name("rpc3_get_total").help("Rpc3 gets").register(cr)
-  val metricPostCount: Counter = Counter.build().name("rpc3_post_total").help("Rpc3 posts").register(cr)
+  val metricGetCount: Counter = Counter.build().name("rpc3_get_total").help("Rpc3 gets").register(TelemetryRegistry.registry)
+  val metricPostCount: Counter = Counter.build().name("rpc3_post_total").help("Rpc3 posts").register(TelemetryRegistry.registry)
   
-  def rpcProxy(req:String): Future[String] = registry.ask(ProxyRpc(req,_))
+  def rpcProxy(req:String): Future[Try[String]] = registry.ask(ProxyRpc(req,_))
       
 
   @POST @Path("/") @Consumes(Array(MediaType.APPLICATION_JSON))

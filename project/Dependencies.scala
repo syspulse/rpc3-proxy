@@ -233,7 +233,7 @@ object Dependencies {
     val libSkelCron =       "io.syspulse"                 %% "skel-cron"            % skelVersion
     val libSkelAuth =       "io.syspulse"                 %% "skel-auth-core"       % skelVersion    
     
-    val libSkel = Seq(libSkelCore,libSkelCron)
+    val libSkel = Seq(libSkelCore,libSkelCron, libScalaTest)
 
   }
   

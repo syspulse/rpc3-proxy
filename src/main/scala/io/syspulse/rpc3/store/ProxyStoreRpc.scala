@@ -32,12 +32,12 @@ import akka.http.scaladsl.model.ContentTypes
 
 import io.syspulse.rpc3.cache.ProxyCache
 
-class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) extends ProxyStore {
+abstract class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) extends ProxyStore {
   val log = Logger(s"${this}")
   
   //implicit val ec: scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.global
   implicit val ec: scala.concurrent.ExecutionContext = 
-    ExecutionContext.fromExecutor(Executors.newFixedThreadPool(4))
+    ExecutionContext.fromExecutor(Executors.newFixedThreadPool(config.rpcThreads))
 
   implicit val as: ActorSystem = ActorSystem()
 
@@ -61,16 +61,7 @@ class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) e
     }      
   }
 
-  // parse reponse as Array of strings
-  def parseBatchRawRes(req:String):Try[Array[String]] = { 
-    try {
-      Success(req.parseJson.convertTo[Array[String]])
-    } catch {
-      case e:Exception => Failure(e)        
-    }      
-  }
-
-  def single(req:String) = {
+  def decodeSingle(req:String) = {
     parseSingleReq(req) match {
       case Success(r) =>         
         //(r.method,r.params,r.id)
@@ -81,7 +72,7 @@ class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) e
     }    
   }
 
-  def batch(req:String) = {
+  def decodeBatch(req:String) = {
     parseBatchReq(req) match {
       case Success(r) =>         
         r
@@ -109,90 +100,9 @@ class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) e
         }
       })
   }
-
-  def batchOptimized(req:String) = {
-    val rr = batch(req)
-        
-    // prepare array for response with Cached and UnCached
-    val rspAll = rr.map( r => {
-      val key = getKey(r)
-      cache.find(key) match {
-        case Some(rsp) => r -> Some(rsp)
-        case None => r -> None
-      }
-    })
-
-    // get only UnCached
-    val rspUnCached = rspAll.filter(r => ! r._2.isDefined)
-    // prepare requests only for uncached
-    val reqUnCached = rspUnCached.map(r => r._1.toJson.compactPrint)
-    
-    // prepare only request
-    val reqRpc = "[" + reqUnCached.mkString(",") + "]"
-
-    // call request
-    val rspRpc = proxy(reqRpc)            
-    
-    // save to cache and other manipulations
-    for {
-      rsp <- rspRpc
-      raw <- {
-        val rspParsed = parseBatchRawRes(rsp)
-        val raw = rspParsed match {
-          case Success(r) => 
-            r
-          case f @ Failure(e) => 
-            log.error(s"failed to parse Rpc response: ${e}")
-            Array[String]()
-        }
-        Future(raw)
-      }
-      all <- {
-        var i = -1
-        val all = rspAll.map( r => {
-          if(r._2.isDefined) r._2.get
-          else {
-            i = i + 1
-            raw(i)          
-          }
-        })
-        Future(all)
-      }
-      _ <- {
-        var i = -1
-        rspUnCached.foreach( r => {
-          val key = getKey(r._1)
-          i = i + 1
-          cache.cache(key,raw(i))
-        })
-        Future(all)
-      }
-      rspClient <- {
-        Future {
-          "[" + all.mkString(",") + "]"
-        }
-      }
-    } yield rspClient
-  }
-
-  def batchCached(req:String) = {
-    val rr = batch(req)    
-    val key = rr.map(r => getKey(r)).mkString("_")
-
-    val rsp = cache.find(key) match {
-      case None => proxy(req)          
-      case Some(rsp) => Future(rsp)
-    }
-
-    // save to cache and other manipulations
-    for {
-      r0 <- rsp
-      _ <- Future(cache.cache(key,r0))
-    } yield r0
-  }
-
-  def singleCached(req:String) = {
-    val r = single(req)
+ 
+  def single(req:String) = {
+    val r = decodeSingle(req)
     val key = getKey(r)
 
     val rsp = cache.find(key) match {
@@ -208,18 +118,18 @@ class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) e
   }
 
   def rpc(req:String) = {
-    log.info(s"req='${req}'")
+    log.debug(s"req='${req}'")
 
     val response = req.trim match {
 
       // single request
       case req if(req.startsWith("{")) => 
-        singleCached(req)        
+        single(req)        
       
       // batch
       case req if(req.startsWith("[")) => 
         //batchOptimized(req)
-        batchCached(req)
+        batch(req)
         
       case _ => 
         Future {
@@ -229,4 +139,6 @@ class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) e
 
     response 
   }
+
+  def batch(req:String):Future[String]
 }

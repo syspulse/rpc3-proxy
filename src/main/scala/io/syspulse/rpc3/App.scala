@@ -28,9 +28,10 @@ case class Config(
   cache:String = "time://",
 
   timeout:Long = 3000L,
-  cacheGC:Long = 10000L,
-
-  rpcUri:String = "http://localhost:8300", //"http://geth.demo.hacken.cloud:8545",
+  cacheGC:Long = 10 * 60 * 1000L,
+  
+  rpcThreads:Int = 4,
+  rpcUri:String = "http://localhost:8300",
   
   cmd:String = "server",
   params: Seq[String] = Seq(),
@@ -55,10 +56,11 @@ object App extends skel.Server {
         ArgString('c', "cache",s"Cache [none,time://] (def: ${d.cache})"),
         
         ArgLong('_', "cache.gc",s"GC interval, msec (def: ${d.cacheGC})"),
-
+        
         ArgString('_', "timeout",s"Timeouts, msec (def: ${d.timeout})"),
 
         ArgString('_', "rpc.uri",s"RPC uri (def: ${d.rpcUri})"),
+        ArgInt('_', "rpc.threads",s"Number of threads (def: ${d.rpcThreads})"),
         
         ArgCmd("server","Command"),
         ArgCmd("client","Command"),
@@ -79,6 +81,7 @@ object App extends skel.Server {
       cacheGC = c.getLong("cache.gc").getOrElse(d.cacheGC),
 
       rpcUri = c.getString("rpc.uri").getOrElse(d.rpcUri),
+      rpcThreads = c.getInt("rpc.threads").getOrElse(d.rpcThreads),
       
       cmd = c.getCmd().getOrElse(d.cmd),
       params = c.getParams(),
@@ -98,10 +101,12 @@ object App extends skel.Server {
 
     val store = config.datastore.split("://").toList match {          
       //case "dir" :: dir ::  _ => new ProxyStoreDir(dir)
-      case "rpc" :: Nil => new ProxyStoreRcp()
-      case "rpc" :: uri => new ProxyStoreRcp(uri.mkString("://"))
-      case "http" :: _ => new ProxyStoreRcp(config.datastore)
-      case "https" :: _ => new ProxyStoreRcp(config.datastore)
+      case "simple" :: Nil => new ProxyStoreRcpSimple()
+      case "simple" :: uri => new ProxyStoreRcpSimple("http://" + uri.mkString("://"))
+      case "rpc" :: Nil => new ProxyStoreRcpOptimized()
+      case "rpc" :: uri => new ProxyStoreRcpOptimized("http://" + uri.mkString("://"))
+      case "http" :: _ => new ProxyStoreRcpOptimized(config.datastore)
+      case "https" :: _ => new ProxyStoreRcpOptimized(config.datastore)
 
       case "none" :: Nil => new ProxyStoreNone()
       case _ => {
