@@ -28,6 +28,7 @@ case class Config(
   cache:String = "time://",
 
   timeout:Long = 3000L,
+  cacheGC:Long = 10000L,
 
   rpcUri:String = "http://localhost:8300", //"http://geth.demo.hacken.cloud:8545",
   
@@ -53,6 +54,8 @@ object App extends skel.Server {
         ArgString('d', "datastore",s"Datastore [none://,rpc://] (def: ${d.datastore})"),
         ArgString('c', "cache",s"Cache [none,time://] (def: ${d.cache})"),
         
+        ArgLong('_', "cache.gc",s"GC interval, msec (def: ${d.cacheGC})"),
+
         ArgString('_', "timeout",s"Timeouts, msec (def: ${d.timeout})"),
 
         ArgString('_', "rpc.uri",s"RPC uri (def: ${d.rpcUri})"),
@@ -73,6 +76,7 @@ object App extends skel.Server {
       cache = c.getString("cache").getOrElse(d.cache),
       
       timeout = c.getLong("timeout").getOrElse(d.timeout),
+      cacheGC = c.getLong("cache.gc").getOrElse(d.cacheGC),
 
       rpcUri = c.getString("rpc.uri").getOrElse(d.rpcUri),
       
@@ -84,7 +88,7 @@ object App extends skel.Server {
     
     implicit val cache = config.cache.split("://").toList match {      
       case "time" :: time :: _ => new ProxyCacheTime(time.toLong)
-      case "time" :: Nil => new ProxyCacheTime()
+      case "time" :: Nil => new ProxyCacheTime(gcFreq = config.cacheGC)
       case "none" :: Nil => new ProxyCacheNone()
       case _ => {
         Console.err.println(s"Uknown datastore: '${config.datastore}'")

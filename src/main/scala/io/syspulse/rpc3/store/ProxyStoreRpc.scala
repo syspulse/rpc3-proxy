@@ -4,6 +4,9 @@ import scala.util.Try
 import scala.util.{Success,Failure}
 import scala.collection.immutable
 
+import scala.concurrent.ExecutionContext
+import java.util.concurrent.Executors
+
 import akka.actor.typed.ActorRef
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
@@ -32,7 +35,10 @@ import io.syspulse.rpc3.cache.ProxyCache
 class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) extends ProxyStore {
   val log = Logger(s"${this}")
   
-  implicit val ec: scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.global
+  //implicit val ec: scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.global
+  implicit val ec: scala.concurrent.ExecutionContext = 
+    ExecutionContext.fromExecutor(Executors.newFixedThreadPool(4))
+
   implicit val as: ActorSystem = ActorSystem()
 
   import ProxyJson._
