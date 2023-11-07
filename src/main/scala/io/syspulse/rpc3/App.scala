@@ -25,9 +25,10 @@ case class Config(
   uri:String = "/api/v1/rpc3",
 
   datastore:String = "none://",
-  cache:String = "time://",
+  cache:String = "expire://",
 
   timeout:Long = 3000L,
+  cacheTTL:Long = 12 * 1000L,
   cacheGC:Long = 10 * 60 * 1000L,
   
   rpcThreads:Int = 4,
@@ -55,7 +56,8 @@ object App extends skel.Server {
         ArgString('d', "datastore",s"Datastore [none://,rpc://] (def: ${d.datastore})"),
         ArgString('c', "cache",s"Cache [none,time://] (def: ${d.cache})"),
         
-        ArgLong('_', "cache.gc",s"GC interval, msec (def: ${d.cacheGC})"),
+        ArgLong('_', "cache.gc",s"Cache GC interval, msec (def: ${d.cacheGC})"),
+        ArgLong('_', "cache.ttl",s"Cache TTL, msec (def: ${d.cacheTTL})"),
         
         ArgString('_', "timeout",s"Timeouts, msec (def: ${d.timeout})"),
 
@@ -79,6 +81,7 @@ object App extends skel.Server {
       
       timeout = c.getLong("timeout").getOrElse(d.timeout),
       cacheGC = c.getLong("cache.gc").getOrElse(d.cacheGC),
+      cacheTTL = c.getLong("cache.ttl").getOrElse(d.cacheTTL),
 
       rpcUri = c.getString("rpc.uri").getOrElse(d.rpcUri),
       rpcThreads = c.getInt("rpc.threads").getOrElse(d.rpcThreads),
@@ -90,11 +93,11 @@ object App extends skel.Server {
     Console.err.println(s"Config: ${config}")
     
     implicit val cache = config.cache.split("://").toList match {      
-      case "time" :: time :: _ => new ProxyCacheTime(time.toLong)
-      case "time" :: Nil => new ProxyCacheTime(gcFreq = config.cacheGC)
+      case "expire" :: time :: _ => new ProxyCacheExpire(time.toLong)
+      case "expire" :: Nil => new ProxyCacheExpire(config.cacheTTL,config.cacheGC)
       case "none" :: Nil => new ProxyCacheNone()
-      case _ => {
-        Console.err.println(s"Uknown datastore: '${config.datastore}'")
+      case _ => {        
+        Console.err.println(s"Uknown cache: '${config.cache}'")
         sys.exit(1)
       }
     }
@@ -108,11 +111,10 @@ object App extends skel.Server {
       case "http" :: _ => new ProxyStoreRcpOptimized(config.datastore)
       case "https" :: _ => new ProxyStoreRcpOptimized(config.datastore)
 
-      case "none" :: Nil => new ProxyStoreNone()
-      case _ => {
+      case "none" :: _ => new ProxyStoreNone()
+      case _ => 
         Console.err.println(s"Uknown datastore: '${config.datastore}'")
-        sys.exit(1)
-      }
+        sys.exit(1)      
     }    
 
     config.cmd match {

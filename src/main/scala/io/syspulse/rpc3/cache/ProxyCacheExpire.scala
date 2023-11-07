@@ -21,7 +21,7 @@ import io.syspulse.skel.service.telemetry.TelemetryRegistry
 
 case class CacheRsp(ts:Long,rsp:String)
 
-class ProxyCacheTime(ttl:Long = 10000L,gcFreq:Long = 10000L) extends ProxyCache {
+class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L) extends ProxyCache {
   val log = Logger(s"${this}")
 
   val metricCacheSizeCount: Counter = Counter.build().name("rpc3_cache_size").help("Cache size").register(TelemetryRegistry.registry)
