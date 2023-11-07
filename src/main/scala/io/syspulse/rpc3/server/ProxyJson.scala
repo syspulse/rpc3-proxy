@@ -9,7 +9,7 @@ import akka.http.scaladsl.server.Directives
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsString, JsValue, JsonFormat, deserializationError}
 
 import io.syspulse.rpc3._
-import io.syspulse.rpc3.server.{ProxyRpcReq,ProxyRpcRes}
+import io.syspulse.rpc3.server.{ProxyRpcReq,ProxyRpcRes,ProxyRpcBlockRes}
 
 object ProxyJson extends JsonCommon {
   
@@ -17,5 +17,8 @@ object ProxyJson extends JsonCommon {
 
   implicit val jf_rpc_req = jsonFormat4(ProxyRpcReq)
   implicit val jf_rpc_res = jsonFormat3(ProxyRpcRes)
+  
+  implicit val jf_rpc_block_result_rsp = jsonFormat1(ProxyRpcBlockResultRes)
+  implicit val jf_rpc_block_rsp = jsonFormat3(ProxyRpcBlockRes)
   
 }

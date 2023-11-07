@@ -83,7 +83,8 @@ abstract class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:Prox
   }
 
   def getKey(r:ProxyRpcReq) = {
-    s"${r.method}-${r.params.toString}"
+    //s"${r.method}-${r.params.toString}"
+    ProxyCache.getKey(r.method,r.params)
   }
 
   def proxy(req:String) = {

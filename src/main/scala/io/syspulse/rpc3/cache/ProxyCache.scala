@@ -12,3 +12,8 @@ trait ProxyCache {
   def cache(key:String,res:String):String
 }
 
+object ProxyCache {
+  def getKey(method:String,params:Seq[Any]) = {
+    s"${method}-${params.toString}"
+  }
+}

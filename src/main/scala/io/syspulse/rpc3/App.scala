@@ -106,10 +106,10 @@ object App extends skel.Server {
       //case "dir" :: dir ::  _ => new ProxyStoreDir(dir)
       case "simple" :: Nil => new ProxyStoreRcpSimple()
       case "simple" :: uri => new ProxyStoreRcpSimple("http://" + uri.mkString("://"))
-      case "rpc" :: Nil => new ProxyStoreRcpOptimized()
-      case "rpc" :: uri => new ProxyStoreRcpOptimized("http://" + uri.mkString("://"))
-      case "http" :: _ => new ProxyStoreRcpOptimized(config.datastore)
-      case "https" :: _ => new ProxyStoreRcpOptimized(config.datastore)
+      case "rpc" :: Nil => new ProxyStoreRcpBatch()
+      case "rpc" :: uri => new ProxyStoreRcpBatch("http://" + uri.mkString("://"))
+      case "http" :: _ => new ProxyStoreRcpBatch(config.datastore)
+      case "https" :: _ => new ProxyStoreRcpBatch(config.datastore)
 
       case "none" :: _ => new ProxyStoreNone()
       case _ => 

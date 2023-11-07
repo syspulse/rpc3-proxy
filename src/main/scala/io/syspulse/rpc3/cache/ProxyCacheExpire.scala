@@ -19,6 +19,10 @@ import io.prometheus.client.Counter
 import io.syspulse.skel.cron.CronFreq
 import io.syspulse.skel.service.telemetry.TelemetryRegistry
 
+import spray.json._
+import io.syspulse.rpc3.server.{ProxyRpcBlockRes,ProxyRpcBlockResultRes}
+import io.syspulse.rpc3.server.ProxyJson
+
 case class CacheRsp(ts:Long,rsp:String)
 
 class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L) extends ProxyCache {
@@ -72,7 +76,28 @@ class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L) extends ProxyCach
   }
 
   def cache(key:String,rsp:String):String = {
-    cache.put(key,CacheRsp(System.currentTimeMillis(),rsp))
+    import ProxyJson._
+
+    val now = System.currentTimeMillis()
+    cache.put(key,CacheRsp(now,rsp))
+
+    // save special case of "latest" block
+    val latest = key.startsWith(ProxyCache.getKey("eth_getBlockByNumber",Seq("latest")).stripSuffix(")"))
+    if(latest) {
+      try {
+        val block = rsp.parseJson.convertTo[ProxyRpcBlockRes].result.number
+                
+        val keyBlock = key.replaceAll("latest",block)
+        log.info(s"latest: ${block} ==> ${keyBlock}")
+
+        cache.put(keyBlock,CacheRsp(now,rsp))
+
+      } catch {
+        case e:Exception =>
+          log.warn(s"could not parse latest: ",e)
+      }
+    }
+
     metricCacheSizeCount.inc()
     rsp
   }
