@@ -78,7 +78,7 @@ class ProxyStoreRcpBatch(rpcUri:String="")(implicit config:Config,cache:ProxyCac
     // prepare request for uncached
     val reqRpc = "[" + reqUnCached.mkString(",") + "]"
 
-    log.info(s"${reqRpc.take(80)} --> ${uri}")
+    // log.info(s"${reqRpc.take(80)} --> ${uri}")
         
     for {
       rsp <- proxy(reqRpc)
