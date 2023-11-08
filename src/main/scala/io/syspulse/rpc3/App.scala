@@ -32,7 +32,7 @@ case class Config(
   cacheGC:Long = 10 * 60 * 1000L,
   
   rpcThreads:Int = 4,
-  rpcUri:String = "http://localhost:8300",
+  rpcPool:String = "http://localhost:8300,http://localhost:8301",
   
   cmd:String = "server",
   params: Seq[String] = Seq(),
@@ -61,7 +61,7 @@ object App extends skel.Server {
         
         ArgString('_', "timeout",s"Timeouts, msec (def: ${d.timeout})"),
 
-        ArgString('_', "rpc.uri",s"RPC uri (def: ${d.rpcUri})"),
+        ArgString('_', "rpc.pool",s"RPC pool (def: ${d.rpcPool})"),
         ArgInt('_', "rpc.threads",s"Number of threads (def: ${d.rpcThreads})"),
         
         ArgCmd("server","Command"),
@@ -83,7 +83,7 @@ object App extends skel.Server {
       cacheGC = c.getLong("cache.gc").getOrElse(d.cacheGC),
       cacheTTL = c.getLong("cache.ttl").getOrElse(d.cacheTTL),
 
-      rpcUri = c.getString("rpc.uri").getOrElse(d.rpcUri),
+      rpcPool = c.getString("rpc.pool").getOrElse(d.rpcPool),
       rpcThreads = c.getInt("rpc.threads").getOrElse(d.rpcThreads),
       
       cmd = c.getCmd().getOrElse(d.cmd),
@@ -110,6 +110,9 @@ object App extends skel.Server {
       case "rpc" :: uri => new ProxyStoreRcpBatch("http://" + uri.mkString("://"))
       case "http" :: _ => new ProxyStoreRcpBatch(config.datastore)
       case "https" :: _ => new ProxyStoreRcpBatch(config.datastore)
+
+      case "pool" :: Nil => new ProxyStoreRcpBatch(config.rpcPool)
+      case "pool" :: pool => new ProxyStoreRcpBatch(pool.mkString("://"))
 
       case "none" :: _ => new ProxyStoreNone()
       case _ => 

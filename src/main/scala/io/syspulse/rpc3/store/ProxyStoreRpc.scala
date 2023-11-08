@@ -37,7 +37,7 @@ import java.util.concurrent.TimeUnit
 import scala.annotation.tailrec
 
 
-abstract class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:ProxyCache) extends ProxyStore {
+abstract class ProxyStoreRcp(uriPool:String="")(implicit config:Config,cache:ProxyCache) extends ProxyStore {
   val log = Logger(s"${this}")
   
   import ProxyJson._
@@ -49,9 +49,14 @@ abstract class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:Prox
 
   implicit val sched = as.scheduler
 
-  val uri = if(rpcUri.isEmpty()) config.rpcUri else rpcUri
+  val uri = {
+    val uu = if(uriPool.isEmpty()) config.rpcPool else uriPool
+    uu.split(",")
+  }.toSeq
 
-  val rpcPool = new RpcPoolSticky(Seq(uri))
+  log.info(s"Pool: ${uri}")
+
+  val rpcPool = new RpcPoolSticky(uri)
   
   def parseSingleReq(req:String):Try[ProxyRpcReq] = { 
     try {
@@ -104,54 +109,45 @@ abstract class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:Prox
   }
 
   def retry(session:RpcSession)(implicit ec: ExecutionContext, sched: Scheduler): Future[String] = {
-    val f = session.next()    
+    val uri = session.next() 
+    val f = rpc1(uri,session.getReq())
     f recoverWith { 
       case e if session.retry > 0 =>
-        log.warn(s"Try[${session.retry}]: ${f}")
+        log.warn(s"retry(${session.retry}): ${uri}")
         akka.pattern.after(FiniteDuration(session.delay,TimeUnit.MILLISECONDS), sched)(retry(session)) 
         //retry(session)
       case e if session.available =>
-        log.warn(s"Try[${session.retry}]: next RPC: ${f}")
+        log.warn(s"retry(${session.retry}): ${uri}")
         akka.pattern.after(FiniteDuration(session.delay,TimeUnit.MILLISECONDS), sched)(retry(session)) 
       
     }
   }
     
   // --------------------------------------------------------------------------------- Proxy ---
+  def rpc1(uri:String,req:String) = {
+    log.info(s"${req.take(80)} --> ${uri}")
+
+    lazy val http = Http()
+    .singleRequest(HttpRequest(HttpMethods.POST,uri, entity = HttpEntity(ContentTypes.`application/json`,req)))
+    .flatMap(res => { 
+      res.status match {
+        case StatusCodes.OK => 
+          val body = res.entity.dataBytes.runReduce(_ ++ _)
+          body.map(_.utf8String)
+        case _ =>
+          log.error(s"RPC error: ${res.status}")
+          val body = res.entity.dataBytes.runReduce(_ ++ _)
+          body.map(_.utf8String)
+      }
+    })
+    http
+  }
+
   def proxy(req:String) = {
-    // request to a single RPC
-    def rpc1(uri:String,req:String) = {
-      log.info(s"${req.take(80)} --> ${uri}")
-
-      lazy val http = Http()
-      .singleRequest(HttpRequest(HttpMethods.POST,uri, entity = HttpEntity(ContentTypes.`application/json`,req)))
-      .flatMap(res => { 
-        res.status match {
-          case StatusCodes.OK => 
-            val body = res.entity.dataBytes.runReduce(_ ++ _)
-            body.map(_.utf8String)
-          case _ =>
-            log.error(s"RPC error: ${res.status}")
-            val body = res.entity.dataBytes.runReduce(_ ++ _)
-            body.map(_.utf8String)
-        }
-      })
-      http
-    }
-    
-    // pool
-    // val rpc_pool = rpcPool.pool().map(uri => {
-    //   // retry single rpc
-    //   val rpc1_retry = retry(rpc1(uri,req),1000L,3)
-    //   rpc1_retry
-    // })
-
-    val rpc_pool = rpcPool.pool().map(uri => rpc1(uri,req))
-
-    val sess = rpcPool.connect(rpc_pool)
+                    
+    val sess = rpcPool.connect(req)
 
     retry(sess)
-    
   }
  
   def single(req:String) = {
