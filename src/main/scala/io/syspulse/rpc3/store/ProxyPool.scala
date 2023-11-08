@@ -16,24 +16,27 @@ import io.syspulse.rpc3.Config
 import io.syspulse.rpc3.cache.ProxyCache
 
 // --- Session -------------------------------------------------------------------------------
-abstract class RpcSession(req:String,pool:Seq[String]) {
+abstract class RpcSession(pool:Seq[String]) {
+  val id = util.Random.nextLong()
   def next():String
+  def get():String
   def available:Boolean
   def delay:Long
-  def retry:Int
-  def getReq():String = req
+  def retry:Int  
 }
 
-class RpcSessionFailFast(req:String,pool:Seq[String],maxRetry:Int = 3,maxLaps:Int = 2) extends RpcSession(req,pool) {
-  @volatile
-  var i = 0
-  @volatile
-  var r = maxRetry
-  @volatile
+class RpcSessionFailFast(pool:Seq[String],maxRetry:Int = 3,maxLaps:Int = 2) extends RpcSession(pool) {
+  
+  var i = 0  
+  var r = maxRetry  
   var lap = 0
+  
+  def get():String = this.synchronized( 
+    pool(i)
+  )
 
-  def next():String = {
-        
+  def next():String = this.synchronized {
+    
     if(r == 0) {
       i = i + 1
       r = maxRetry
@@ -51,11 +54,13 @@ class RpcSessionFailFast(req:String,pool:Seq[String],maxRetry:Int = 3,maxLaps:In
 
     rpc
   }
-  def available:Boolean = {
+  
+  def available:Boolean = this.synchronized {
     lap < maxLaps
   }
   def delay:Long = 1000L
-  def retry = r
+  
+  def retry = this.synchronized { r }
 }
 
 // --- Pool -------------------------------------------------------------------------------
@@ -64,11 +69,12 @@ trait RpcPool {
   def connect(req:String):RpcSession
 }
 
-class RpcPoolSticky(pool:Seq[String]) extends RpcPool {
+class RpcPoolSticky(pool:Seq[String]) extends RpcPool {  
   def pool():Seq[String] = pool
   def connect(req:String) = {
-    new RpcSessionFailFast(req,pool)
+    sticky
   }
-}
 
-  
+  // persistant pool
+  val sticky = new RpcSessionFailFast(pool)
+}

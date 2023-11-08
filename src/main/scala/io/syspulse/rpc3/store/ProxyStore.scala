@@ -9,4 +9,3 @@ trait ProxyStore {
   
   def rpc(req:String):Future[String]
 }
-
