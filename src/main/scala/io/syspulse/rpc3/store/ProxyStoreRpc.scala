@@ -35,6 +35,8 @@ import akka.actor.Scheduler
 import scala.concurrent.duration.FiniteDuration
 import java.util.concurrent.TimeUnit
 import scala.annotation.tailrec
+import akka.http.scaladsl.settings.ConnectionPoolSettings
+import akka.http.scaladsl.settings.ClientConnectionSettings
 
 
 abstract class ProxyStoreRcp(uriPool:String="")(implicit config:Config,cache:ProxyCache) extends ProxyStore {
@@ -48,6 +50,19 @@ abstract class ProxyStoreRcp(uriPool:String="")(implicit config:Config,cache:Pro
   implicit val as: ActorSystem = ActorSystem("proxy")
 
   implicit val sched = as.scheduler
+
+  def retry_1_deterministic(as:ActorSystem,timeout:FiniteDuration) = ConnectionPoolSettings(as)
+                          .withBaseConnectionBackoff(FiniteDuration(1000,TimeUnit.MILLISECONDS))
+                          .withMaxConnectionBackoff(FiniteDuration(1000,TimeUnit.MILLISECONDS))
+                          .withMaxConnections(1)
+                          .withMaxRetries(1)
+                          .withConnectionSettings(ClientConnectionSettings(as)
+                          .withIdleTimeout(timeout)
+                          .withConnectingTimeout(timeout))
+
+  def retry_deterministic(as:ActorSystem,timeout:FiniteDuration) = ConnectionPoolSettings(as)
+                          .withBaseConnectionBackoff(timeout)
+                          .withMaxConnectionBackoff(timeout)
 
   val uri = {
     val uu = if(uriPool.isEmpty()) config.rpcPool else uriPool
@@ -96,7 +111,6 @@ abstract class ProxyStoreRcp(uriPool:String="")(implicit config:Config,cache:Pro
   }
 
   def getKey(r:ProxyRpcReq) = {
-    //s"${r.method}-${r.params.toString}"
     ProxyCache.getKey(r.method,r.params)
   }
 
@@ -114,16 +128,16 @@ abstract class ProxyStoreRcp(uriPool:String="")(implicit config:Config,cache:Pro
     val f = rpc1(uri,req)
 
     f recoverWith { 
-      case e if session.retry > 0 => 
-        // retry to the same RPC
-        log.warn(s"retry(${session.retry}): ${uri}")
-        session.next()
-        akka.pattern.after(FiniteDuration(session.delay,TimeUnit.MILLISECONDS), sched)(retry(req,session))         
+      // case e if session.retry > 0 => 
+      //   // retry to the same RPC
+      //   log.warn(s"retry(${session.retry},${session.lap}): ${uri}")
+      //   session.next()
+      //   akka.pattern.after(FiniteDuration(config.rpcDelay,TimeUnit.MILLISECONDS), sched)(retry(req,session))         
       case e if session.available =>
         // switch to another RPC or fail
-        log.warn(s"retry(${session.retry}): ${uri}")
+        log.warn(s"retry(${session.retry},${session.lap}): ${uri}")
         session.next()
-        akka.pattern.after(FiniteDuration(session.delay,TimeUnit.MILLISECONDS), sched)(retry(req,session))      
+        akka.pattern.after(FiniteDuration(config.rpcDelay,TimeUnit.MILLISECONDS), sched)(retry(req,session))      
     }
   }
     
@@ -132,7 +146,8 @@ abstract class ProxyStoreRcp(uriPool:String="")(implicit config:Config,cache:Pro
     log.info(s"${req.take(80)} --> ${uri}")
 
     lazy val http = Http()
-    .singleRequest(HttpRequest(HttpMethods.POST,uri, entity = HttpEntity(ContentTypes.`application/json`,req)))
+    .singleRequest(HttpRequest(HttpMethods.POST,uri, entity = HttpEntity(ContentTypes.`application/json`,req)),
+                   settings = retry_deterministic(as,FiniteDuration(100L,TimeUnit.MILLISECONDS)))
     .flatMap(res => { 
       res.status match {
         case StatusCodes.OK => 

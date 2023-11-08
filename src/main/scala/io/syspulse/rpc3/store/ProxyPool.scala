@@ -20,16 +20,17 @@ abstract class RpcSession(pool:Seq[String]) {
   val id = util.Random.nextLong()
   def next():String
   def get():String
-  def available:Boolean
-  def delay:Long
-  def retry:Int  
+  def available:Boolean  
+  def retry:Int
+  def lap:Int
 }
 
-class RpcSessionFailFast(pool:Seq[String],maxRetry:Int = 3,maxLaps:Int = 2) extends RpcSession(pool) {
+class RpcSessionFailFast(pool:Seq[String],maxRetry:Int = 3,maxLaps:Int = 1) extends RpcSession(pool) {
   
   var i = 0  
   var r = maxRetry  
-  var lap = 0
+  var l = 0
+  var i0 = i
   
   def get():String = this.synchronized( 
     pool(i)
@@ -40,13 +41,22 @@ class RpcSessionFailFast(pool:Seq[String],maxRetry:Int = 3,maxLaps:Int = 2) exte
     if(r == 0) {
       i = i + 1
       r = maxRetry
+
+      if(i == i0) {
+        // overlap
+        l = l + 1
+      }
     }
 
     if(i == pool.size) {
       i = 0
       r = maxRetry
-      lap = lap + 1
-    }
+      
+      if(i == i0) {
+        // overlap
+        l = l + 1
+      }
+    }    
 
     val rpc = pool(i)
 
@@ -56,11 +66,18 @@ class RpcSessionFailFast(pool:Seq[String],maxRetry:Int = 3,maxLaps:Int = 2) exte
   }
   
   def available:Boolean = this.synchronized {
-    lap < maxLaps
-  }
-  def delay:Long = 1000L
+    l < maxLaps
+  }  
   
   def retry = this.synchronized { r }
+
+  def lap = this.synchronized{ l }
+
+  def connect() = this.synchronized{
+    r = maxRetry
+    i0 = i
+    l = 0
+  }
 }
 
 // --- Pool -------------------------------------------------------------------------------
@@ -69,12 +86,13 @@ trait RpcPool {
   def connect(req:String):RpcSession
 }
 
-class RpcPoolSticky(pool:Seq[String]) extends RpcPool {  
+class RpcPoolSticky(pool:Seq[String])(implicit config:Config) extends RpcPool {  
   def pool():Seq[String] = pool
   def connect(req:String) = {
+    sticky.connect()
     sticky
   }
 
   // persistant pool
-  val sticky = new RpcSessionFailFast(pool)
+  val sticky = new RpcSessionFailFast(pool,config.rpcRetry,config.rpcLaps)
 }

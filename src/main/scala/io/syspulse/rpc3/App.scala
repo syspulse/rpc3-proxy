@@ -26,13 +26,16 @@ case class Config(
 
   datastore:String = "none://",
   cache:String = "expire://",
-
-  timeout:Long = 3000L,
+  
   cacheTTL:Long = 12 * 9000L,
   cacheGC:Long = 10 * 60 * 1000L,
   
   rpcThreads:Int = 4,
   rpcPool:String = "http://localhost:8300,http://localhost:8301",
+  rpcTimeout:Long = 3000L,
+  rpcRetry:Int = 3,
+  rpcLaps:Int = 1,
+  rpcDelay:Long = 1000L,
   
   cmd:String = "server",
   params: Seq[String] = Seq(),
@@ -59,10 +62,12 @@ object App extends skel.Server {
         ArgLong('_', "cache.gc",s"Cache GC interval, msec (def: ${d.cacheGC})"),
         ArgLong('_', "cache.ttl",s"Cache TTL, msec (def: ${d.cacheTTL})"),
         
-        ArgString('_', "timeout",s"Timeouts, msec (def: ${d.timeout})"),
-
+        ArgString('_', "rpc.timeout",s"RPC Timeout (connect), msec (def: ${d.rpcTimeout})"),
         ArgString('_', "rpc.pool",s"RPC pool (def: ${d.rpcPool})"),
         ArgInt('_', "rpc.threads",s"Number of threads (def: ${d.rpcThreads})"),
+        ArgInt('_', "rpc.retry",s"Number of retries (def: ${d.rpcThreads})"),
+        ArgInt('_', "rpc.laps",s"Number of pool lapses (def: ${d.rpcLaps})"),
+        ArgLong('_',"rpc.delay",s"Delay between retry, msec (def: ${d.rpcDelay})"),
         
         ArgCmd("server","Command"),
         ArgCmd("client","Command"),
@@ -78,13 +83,16 @@ object App extends skel.Server {
       
       datastore = c.getString("datastore").getOrElse(d.datastore),
       cache = c.getString("cache").getOrElse(d.cache),
-      
-      timeout = c.getLong("timeout").getOrElse(d.timeout),
+            
       cacheGC = c.getLong("cache.gc").getOrElse(d.cacheGC),
       cacheTTL = c.getLong("cache.ttl").getOrElse(d.cacheTTL),
 
+      rpcTimeout = c.getLong("rpc.timeout").getOrElse(d.rpcTimeout),
       rpcPool = c.getString("rpc.pool").getOrElse(d.rpcPool),
       rpcThreads = c.getInt("rpc.threads").getOrElse(d.rpcThreads),
+      rpcRetry = c.getInt("rpc.retry").getOrElse(d.rpcRetry),
+      rpcLaps = c.getInt("rpc.laps").getOrElse(d.rpcLaps),
+      rpcDelay = c.getLong("rpc.delay").getOrElse(d.rpcDelay),
       
       cmd = c.getCmd().getOrElse(d.cmd),
       params = c.getParams(),
