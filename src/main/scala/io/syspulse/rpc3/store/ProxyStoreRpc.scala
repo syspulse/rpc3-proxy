@@ -37,6 +37,7 @@ import java.util.concurrent.TimeUnit
 import scala.annotation.tailrec
 import akka.http.scaladsl.settings.ConnectionPoolSettings
 import akka.http.scaladsl.settings.ClientConnectionSettings
+import scala.concurrent.Await
 
 
 abstract class ProxyStoreRcp(uriPool:String="")(implicit config:Config,cache:ProxyCache) extends ProxyStore {
@@ -147,7 +148,7 @@ abstract class ProxyStoreRcp(uriPool:String="")(implicit config:Config,cache:Pro
 
     lazy val http = Http()
     .singleRequest(HttpRequest(HttpMethods.POST,uri, entity = HttpEntity(ContentTypes.`application/json`,req)),
-                   settings = retry_deterministic(as,FiniteDuration(100L,TimeUnit.MILLISECONDS)))
+                   settings = retry_deterministic(as,FiniteDuration(config.rpcTimeout,TimeUnit.MILLISECONDS)))
     .flatMap(res => { 
       res.status match {
         case StatusCodes.OK => 
@@ -156,7 +157,8 @@ abstract class ProxyStoreRcp(uriPool:String="")(implicit config:Config,cache:Pro
         case _ =>
           log.error(s"RPC error: ${res.status}")
           val body = res.entity.dataBytes.runReduce(_ ++ _)
-          body.map(_.utf8String)
+          val txt = Await.result(body.map(_.utf8String),FiniteDuration(5000L,TimeUnit.MILLISECONDS))
+          throw new Exception(s"${res.status}: ${txt}")
       }
     })
     http

@@ -32,7 +32,7 @@ case class Config(
   
   rpcThreads:Int = 4,
   rpcPool:String = "http://localhost:8300,http://localhost:8301",
-  rpcTimeout:Long = 3000L,
+  rpcTimeout:Long = 150L,
   rpcRetry:Int = 3,
   rpcLaps:Int = 1,
   rpcDelay:Long = 1000L,
@@ -62,7 +62,7 @@ object App extends skel.Server {
         ArgLong('_', "cache.gc",s"Cache GC interval, msec (def: ${d.cacheGC})"),
         ArgLong('_', "cache.ttl",s"Cache TTL, msec (def: ${d.cacheTTL})"),
         
-        ArgString('_', "rpc.timeout",s"RPC Timeout (connect), msec (def: ${d.rpcTimeout})"),
+        ArgLong('_', "rpc.timeout",s"RPC Timeout (connect), msec (def: ${d.rpcTimeout})"),
         ArgString('_', "rpc.pool",s"RPC pool (def: ${d.rpcPool})"),
         ArgInt('_', "rpc.threads",s"Number of threads (def: ${d.rpcThreads})"),
         ArgInt('_', "rpc.retry",s"Number of retries (def: ${d.rpcThreads})"),
