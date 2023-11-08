@@ -28,7 +28,7 @@ case class Config(
   cache:String = "expire://",
 
   timeout:Long = 3000L,
-  cacheTTL:Long = 12 * 1000L,
+  cacheTTL:Long = 12 * 9000L,
   cacheGC:Long = 10 * 60 * 1000L,
   
   rpcThreads:Int = 4,

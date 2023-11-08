@@ -88,7 +88,8 @@ class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L) extends ProxyCach
         val block = rsp.parseJson.convertTo[ProxyRpcBlockRes].result.number
                 
         val keyBlock = key.replaceAll("latest",block)
-        log.info(s"latest: ${block} ==> ${keyBlock}")
+        
+        log.debug(s"latest: ${block} => Cache[${keyBlock}]")
 
         cache.put(keyBlock,CacheRsp(now,rsp))
 

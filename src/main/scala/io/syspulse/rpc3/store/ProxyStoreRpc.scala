@@ -107,7 +107,9 @@ abstract class ProxyStoreRcp(rpcUri:String="")(implicit config:Config,cache:Prox
     val key = getKey(r)
 
     val rsp = cache.find(key) match {
-      case None => proxy(req)          
+      case None => 
+        log.info(s"${req.take(80)} --> ${uri}")
+        proxy(req)          
       case Some(rsp) => Future(rsp)
     }
 
