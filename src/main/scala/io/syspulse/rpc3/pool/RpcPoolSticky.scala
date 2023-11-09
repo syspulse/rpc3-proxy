@@ -22,11 +22,11 @@ class RpcSessionSticky(pool:Seq[String],maxRetry:Int = 3,maxLaps:Int = 1) extend
   var l = 0
   var i0 = i
   
-  def get():String = this.synchronized( 
+  def next():String = this.synchronized( 
     pool(i)
   )
 
-  def next():String = this.synchronized {
+  def failed():String = this.synchronized {
     
     if(r == 0) {
       i = i + 1

@@ -37,7 +37,7 @@ case class Config(
   rpcRetry:Int = 3,
   rpcLaps:Int = 1,
   rpcDelay:Long = 1000L,
-
+  rpcFailback:Long = 10000L,
   
   
   cmd:String = "server",
@@ -72,6 +72,7 @@ object App extends skel.Server {
         ArgInt('_', "rpc.retry",s"Number of retries (def: ${d.rpcThreads})"),
         ArgInt('_', "rpc.laps",s"Number of pool lapses (def: ${d.rpcLaps})"),
         ArgLong('_',"rpc.delay",s"Delay between retry, msec (def: ${d.rpcDelay})"),
+        ArgLong('_',"rpc.failback",s"Delay between failback retry (to previously failed node), msec (def: ${d.rpcFailback})"),
         
         ArgCmd("server","Command"),
         ArgCmd("client","Command"),
@@ -98,6 +99,7 @@ object App extends skel.Server {
       rpcRetry = c.getInt("rpc.retry").getOrElse(d.rpcRetry),
       rpcLaps = c.getInt("rpc.laps").getOrElse(d.rpcLaps),
       rpcDelay = c.getLong("rpc.delay").getOrElse(d.rpcDelay),
+      rpcFailback = c.getLong("rpc.failback").getOrElse(d.rpcFailback),
       
       cmd = c.getCmd().getOrElse(d.cmd),
       params = c.getParams(),

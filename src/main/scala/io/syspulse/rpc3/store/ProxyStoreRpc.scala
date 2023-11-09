@@ -120,7 +120,7 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
   }
 
   def retry(req:String,session:RpcSession)(implicit ec: ExecutionContext, sched: Scheduler): Future[String] = {
-    val uri = session.get()
+    val uri = session.next()
     
     val f = rpc1(uri,req)
 
@@ -128,12 +128,12 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
       // case e if session.retry > 0 => 
       //   // retry to the same RPC
       //   log.warn(s"retry(${session.retry},${session.lap}): ${uri}")
-      //   session.next()
+      //   session.failed()
       //   akka.pattern.after(FiniteDuration(config.rpcDelay,TimeUnit.MILLISECONDS), sched)(retry(req,session))         
       case e if session.available =>
         // switch to another RPC or fail
         log.warn(s"retry(${session.retry},${session.lap}): ${uri}")
-        session.next()
+        session.failed()
         akka.pattern.after(FiniteDuration(config.rpcDelay,TimeUnit.MILLISECONDS), sched)(retry(req,session))      
     }
   }

@@ -15,18 +15,18 @@ import scala.concurrent.Future
 import io.syspulse.rpc3.Config
 import io.syspulse.rpc3.cache.ProxyCache
 
-class RpcSessionLoadBalance(pool:Seq[String],maxRetry:Int = 3,maxLaps:Int = 1) extends RpcSession(pool) {
+class RpcSessionLoadBalance(pool:Seq[String],rpcFailback:Long = 10000L, maxRetry:Int = 3,maxLaps:Int = 1) extends RpcSession(pool) {
   
   var i = 0  
   var r = maxRetry  
   var l = 0
   var i0 = i
-  var failed:Array[Long] = pool.map(_ => 0L).toArray
+  var failedNodes:Array[Long] = pool.map(_ => 0L).toArray
   var f = -1
   
-  def get():String = this.synchronized {    
+  def next():String = this.synchronized {    
     
-    println(s"i=${i}: r=${r}, f=${f}, failed=${failed.toSeq}")
+    //println(s"i=${i}: r=${r}, f=${f}, failed=${failedNodes.toSeq}")
     if(f != -1) {
       // return if retrying failing
       return pool(f)
@@ -37,11 +37,11 @@ class RpcSessionLoadBalance(pool:Seq[String],maxRetry:Int = 3,maxLaps:Int = 1) e
     i0 = i
     
     // find next non-failed
-    val range = Range(i + 1,failed.size) ++ Range(0,i + 1)
+    val range = Range(i + 1,failedNodes.size) ++ Range(0,i + 1)
     val now = System.currentTimeMillis
-    val i_next = range.filter(i => (now - failed(i)) >= 10000L ).toList
+    val i_next = range.filter(i => (now - failedNodes(i)) >= rpcFailback ).toList
         
-    println(s"next=${i_next}: failed=${failed.toSeq}")
+    //println(s"next=${i_next}: failed=${failedNodes.toSeq}")
     
     i = i_next match {
       case Nil => 
@@ -54,17 +54,17 @@ class RpcSessionLoadBalance(pool:Seq[String],maxRetry:Int = 3,maxLaps:Int = 1) e
     } 
     
     // marked as non-failed, error will fail it
-    failed(i) = 0L
+    failedNodes(i) = 0L
 
     r = maxRetry
     
     rpc
   }
 
-  def next():String = this.synchronized {
+  def failed():String = this.synchronized {
 
     f = i0 
-    failed(f) = System.currentTimeMillis
+    failedNodes(f) = System.currentTimeMillis
 
     val rpc = pool(f)
     
@@ -101,5 +101,5 @@ class RpcPoolLoadBalance(pool:Seq[String])(implicit config:Config) extends RpcPo
   }
 
   // persistant pool
-  val session = new RpcSessionLoadBalance(pool,config.rpcRetry,config.rpcLaps)
+  val session = new RpcSessionLoadBalance(pool,config.rpcFailback, config.rpcRetry,config.rpcLaps)
 }

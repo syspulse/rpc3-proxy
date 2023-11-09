@@ -10,7 +10,9 @@ Caching Proxy for EVM RPC.
    - ttl : time to live for one request
    - gc: Garbage collection for expired requests
 
-- Multiple RPC nodes are supported for load-balancing/failover
+- Multiple RPC nodes Pool:
+   - __lb__ : load-balancing round-robin with periodic retry of failed
+   - __sticky__: stays on healthy node and does not fail-back
 
 The size of cache is not limited, use `gc` option
 
@@ -20,13 +22,20 @@ The size of cache is not limited, use `gc` option
 ### Run with cache 12 seconds
 
 ```
-./run-rpc3.sh -d=http://geth:8545 --cache.ttl=120000
+./run-rpc3.sh --pool=http://geth:8545 --cache.ttl=120000
 ```
 
 ### Run with 4 Threads pool 
 
 ```
-./run-rpc3.sh -d=http://geth:8545 --proxy.threads=4
+./run-rpc3.sh --pool=http://geth:8545 --proxy.threads=4
+```
+
+### Run with Round-robin load-balancing Nodes Pool
+
+
+```
+./run-rpc3.sh --pool=lb://http://geth-1:8545,http://geth-2:8545
 ```
 
 
@@ -46,7 +55,7 @@ Run one HTTP pong:
 Run proxy with One node failure:
 
 ```
-./run-rpc3.sh -d=http://localhost:8000,http://localhost:8300
+./run-rpc3.sh --pool=http://localhost:8000,http://localhost:8300
 ```
 
 Execute request:
@@ -64,7 +73,7 @@ Run HTTP server with 429 Response
 CODE=429 ./http-server.sh RSP_Batch_1.json
 ```
 ```
-./run-rpc3.sh -d=http://localhost:8300,http://geth1:8545
+./run-rpc3.sh --pool=http://localhost:8300,http://geth1:8545
 ```
 
 Execute request:
