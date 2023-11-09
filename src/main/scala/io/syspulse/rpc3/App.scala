@@ -119,7 +119,7 @@ object App extends skel.Server {
       case "http" ::  uri => new RpcPoolSticky(("http://"+uri.mkString("://")).split(",").toSeq)
       case "https" ::  uri => new RpcPoolSticky(("https://"+uri.mkString("://")).split(",").toSeq)
       case "sticky" ::  uri => new RpcPoolSticky(uri.mkString("://").split(",").toSeq)
-      //case "lb" :: uri => new RpcPoolLB(uri.mkString("://").split(",").toSeq)
+      case "lb" :: uri => new RpcPoolLoadBalance(uri.mkString("://").split(",").toSeq)
       case "pool" :: uri => new RpcPoolSticky(uri.mkString("://").split(",").toSeq)
       case _ => {        
         Console.err.println(s"Uknown pool: '${config.pool}'")
