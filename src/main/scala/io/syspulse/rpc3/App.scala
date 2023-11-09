@@ -27,7 +27,7 @@ case class Config(
   datastore:String = "none://",
   cache:String = "expire://",
   
-  cacheTTL:Long = 12 * 9000L,
+  cacheTTL:Long = 10 * 9000L,
   cacheGC:Long = 10 * 60 * 1000L,
   
   rpcThreads:Int = 4,
