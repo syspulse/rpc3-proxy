@@ -11,6 +11,7 @@ import io.syspulse.skel.config._
 import io.syspulse.rpc3._
 import io.syspulse.rpc3.store._
 import io.syspulse.rpc3.cache._
+import io.syspulse.rpc3.pool._
 import io.syspulse.rpc3.server.ProxyRoutes
 
 import io.jvm.uuid._
@@ -24,18 +25,20 @@ case class Config(
   port:Int=8080,
   uri:String = "/api/v1/rpc3",
 
-  datastore:String = "none://",
+  datastore:String = "rpc://",
   cache:String = "expire://",
+  pool:String = "sticky://http://localhost:8300,http://localhost:8301",
   
   cacheTTL:Long = 10 * 9000L,
   cacheGC:Long = 10 * 60 * 1000L,
   
-  rpcThreads:Int = 4,
-  rpcPool:String = "http://localhost:8300,http://localhost:8301",
+  rpcThreads:Int = 4,  
   rpcTimeout:Long = 150L,
   rpcRetry:Int = 3,
   rpcLaps:Int = 1,
   rpcDelay:Long = 1000L,
+
+  
   
   cmd:String = "server",
   params: Seq[String] = Seq(),
@@ -58,12 +61,13 @@ object App extends skel.Server {
 
         ArgString('d', "datastore",s"Datastore [none://,rpc://] (def: ${d.datastore})"),
         ArgString('c', "cache",s"Cache [none,time://] (def: ${d.cache})"),
+        ArgString('_', "pool",s"Cache [fastfail://] (def: ${d.pool})"),
         
         ArgLong('_', "cache.gc",s"Cache GC interval, msec (def: ${d.cacheGC})"),
         ArgLong('_', "cache.ttl",s"Cache TTL, msec (def: ${d.cacheTTL})"),
         
         ArgLong('_', "rpc.timeout",s"RPC Timeout (connect), msec (def: ${d.rpcTimeout})"),
-        ArgString('_', "rpc.pool",s"RPC pool (def: ${d.rpcPool})"),
+        
         ArgInt('_', "rpc.threads",s"Number of threads (def: ${d.rpcThreads})"),
         ArgInt('_', "rpc.retry",s"Number of retries (def: ${d.rpcThreads})"),
         ArgInt('_', "rpc.laps",s"Number of pool lapses (def: ${d.rpcLaps})"),
@@ -83,12 +87,13 @@ object App extends skel.Server {
       
       datastore = c.getString("datastore").getOrElse(d.datastore),
       cache = c.getString("cache").getOrElse(d.cache),
+      pool = c.getString("pool").getOrElse(d.pool),
             
       cacheGC = c.getLong("cache.gc").getOrElse(d.cacheGC),
       cacheTTL = c.getLong("cache.ttl").getOrElse(d.cacheTTL),
 
       rpcTimeout = c.getLong("rpc.timeout").getOrElse(d.rpcTimeout),
-      rpcPool = c.getString("rpc.pool").getOrElse(d.rpcPool),
+      
       rpcThreads = c.getInt("rpc.threads").getOrElse(d.rpcThreads),
       rpcRetry = c.getInt("rpc.retry").getOrElse(d.rpcRetry),
       rpcLaps = c.getInt("rpc.laps").getOrElse(d.rpcLaps),
@@ -109,29 +114,36 @@ object App extends skel.Server {
         sys.exit(1)
       }
     }
+    
+    val pool = config.pool.split("://").toList match {
+      case "http" ::  uri => new RpcPoolSticky(("http://"+uri.mkString("://")).split(",").toSeq)
+      case "https" ::  uri => new RpcPoolSticky(("https://"+uri.mkString("://")).split(",").toSeq)
+      case "sticky" ::  uri => new RpcPoolSticky(uri.mkString("://").split(",").toSeq)
+      //case "lb" :: uri => new RpcPoolLB(uri.mkString("://").split(",").toSeq)
+      case "pool" :: uri => new RpcPoolSticky(uri.mkString("://").split(",").toSeq)
+      case _ => {        
+        Console.err.println(s"Uknown pool: '${config.pool}'")
+        sys.exit(1)
+      }
+    }    
 
     val store = config.datastore.split("://").toList match {          
       //case "dir" :: dir ::  _ => new ProxyStoreDir(dir)
-      case "simple" :: Nil => new ProxyStoreRcpSimple()
-      case "simple" :: uri => new ProxyStoreRcpSimple("http://" + uri.mkString("://"))
-      case "rpc" :: Nil => new ProxyStoreRcpBatch()
-      case "rpc" :: uri => new ProxyStoreRcpBatch("http://" + uri.mkString("://"))
-      case "http" :: _ => new ProxyStoreRcpBatch(config.datastore)
-      case "https" :: _ => new ProxyStoreRcpBatch(config.datastore)
-
-      case "pool" :: Nil => new ProxyStoreRcpBatch(config.rpcPool)
-      case "pool" :: pool => new ProxyStoreRcpBatch(pool.mkString("://"))
-
+      case "simple" :: Nil => new ProxyStoreRcpSimple(pool)
+      case "simple" :: uri => new ProxyStoreRcpSimple(pool)
+      case "rpc" :: Nil => new ProxyStoreRcpBatch(pool)
+      case "rpc" :: uri => new ProxyStoreRcpBatch(pool)
+      
       case "none" :: _ => new ProxyStoreNone()
       case _ => 
         Console.err.println(s"Uknown datastore: '${config.datastore}'")
         sys.exit(1)      
-    }    
+    }
+    
 
     config.cmd match {
       case "server" => 
-        
-        
+                
         run( config.host, config.port,config.uri,c,
           Seq(
             (ProxyRegistry(store),"ProxyRegistry",(r, ac) => new ProxyRoutes(r)(ac,config) )

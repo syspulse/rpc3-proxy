@@ -31,9 +31,10 @@ import akka.http.scaladsl.model.HttpEntity
 import akka.http.scaladsl.model.ContentTypes
 
 import io.syspulse.rpc3.cache.ProxyCache
+import io.syspulse.rpc3.pool.RpcPool
 
-class ProxyStoreRcpBatch(rpcUri:String="")(implicit config:Config,cache:ProxyCache) 
-  extends ProxyStoreRcp(rpcUri)(config,cache) {
+class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
+  extends ProxyStoreRcp(pool)(config,cache) {
   
   import ProxyJson._
 

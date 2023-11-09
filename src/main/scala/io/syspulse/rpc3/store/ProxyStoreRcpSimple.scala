@@ -31,9 +31,10 @@ import akka.http.scaladsl.model.HttpEntity
 import akka.http.scaladsl.model.ContentTypes
 
 import io.syspulse.rpc3.cache.ProxyCache
+import io.syspulse.rpc3.pool.RpcPool
 
-class ProxyStoreRcpSimple(rpcUri:String="")(implicit config:Config,cache:ProxyCache) 
-  extends ProxyStoreRcp(rpcUri)(config,cache) {
+class ProxyStoreRcpSimple(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
+  extends ProxyStoreRcp(pool)(config,cache) {
   
   def batch(req:String):Future[String] = {
     val rr = decodeBatch(req)    

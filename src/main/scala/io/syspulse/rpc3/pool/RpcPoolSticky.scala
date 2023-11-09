@@ -1,4 +1,4 @@
-package io.syspulse.rpc3.store
+package io.syspulse.rpc3.pool
 
 import scala.util.Try
 import scala.util.{Success,Failure}
@@ -15,17 +15,7 @@ import scala.concurrent.Future
 import io.syspulse.rpc3.Config
 import io.syspulse.rpc3.cache.ProxyCache
 
-// --- Session -------------------------------------------------------------------------------
-abstract class RpcSession(pool:Seq[String]) {
-  val id = util.Random.nextLong()
-  def next():String
-  def get():String
-  def available:Boolean  
-  def retry:Int
-  def lap:Int
-}
-
-class RpcSessionFailFast(pool:Seq[String],maxRetry:Int = 3,maxLaps:Int = 1) extends RpcSession(pool) {
+class RpcSessionSticky(pool:Seq[String],maxRetry:Int = 3,maxLaps:Int = 1) extends RpcSession(pool) {
   
   var i = 0  
   var r = maxRetry  
@@ -80,11 +70,6 @@ class RpcSessionFailFast(pool:Seq[String],maxRetry:Int = 3,maxLaps:Int = 1) exte
   }
 }
 
-// --- Pool -------------------------------------------------------------------------------
-trait RpcPool {
-  def pool():Seq[String] 
-  def connect(req:String):RpcSession
-}
 
 class RpcPoolSticky(pool:Seq[String])(implicit config:Config) extends RpcPool {  
   def pool():Seq[String] = pool
@@ -94,5 +79,5 @@ class RpcPoolSticky(pool:Seq[String])(implicit config:Config) extends RpcPool {
   }
 
   // persistant pool
-  val sticky = new RpcSessionFailFast(pool,config.rpcRetry,config.rpcLaps)
+  val sticky = new RpcSessionSticky(pool,config.rpcRetry,config.rpcLaps)
 }

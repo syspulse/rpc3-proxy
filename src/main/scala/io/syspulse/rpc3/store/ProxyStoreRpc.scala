@@ -39,8 +39,10 @@ import akka.http.scaladsl.settings.ConnectionPoolSettings
 import akka.http.scaladsl.settings.ClientConnectionSettings
 import scala.concurrent.Await
 
+import io.syspulse.rpc3.pool.RpcPool
+import io.syspulse.rpc3.pool.RpcSession
 
-abstract class ProxyStoreRcp(uriPool:String="")(implicit config:Config,cache:ProxyCache) extends ProxyStore {
+abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCache) extends ProxyStore {
   val log = Logger(s"${this}")
   
   import ProxyJson._
@@ -65,14 +67,8 @@ abstract class ProxyStoreRcp(uriPool:String="")(implicit config:Config,cache:Pro
                           .withBaseConnectionBackoff(timeout)
                           .withMaxConnectionBackoff(timeout)
 
-  val uri = {
-    val uu = if(uriPool.isEmpty()) config.rpcPool else uriPool
-    uu.split(",")
-  }.toSeq
-
-  log.info(s"Pool: ${uri}")
-
-  val rpcPool = new RpcPoolSticky(uri)
+  
+  log.info(s"Pool: ${pool}")
   
   def parseSingleReq(req:String):Try[ProxyRpcReq] = { 
     try {
@@ -166,7 +162,7 @@ abstract class ProxyStoreRcp(uriPool:String="")(implicit config:Config,cache:Pro
 
   def proxy(req:String) = {
                     
-    val session = rpcPool.connect(req)    
+    val session = pool.connect(req)    
 
     retry(req,session)
   }
