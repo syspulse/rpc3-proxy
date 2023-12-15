@@ -172,17 +172,18 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
     val key = getKey(r)
 
     val rsp = cache.find(key) match {
-      case None => 
-        
-        proxy(req)          
-      case Some(rsp) => Future(rsp)
+      case None =>         
+        // save to cache only on missed 
+        for {
+          r0 <- proxy(req)
+          _ <- Future(cache.cache(key,r0))
+        } yield r0
+
+      case Some(rsp) => 
+        Future(rsp)
     }
 
-    // save to cache and other manipulations
-    for {
-      r0 <- rsp
-      _ <- Future(cache.cache(key,r0))
-    } yield r0
+    rsp 
   }
 
   def rpc(req:String) = {

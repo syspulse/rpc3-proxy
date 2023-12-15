@@ -102,6 +102,9 @@ class RpcPoolLoadBalance(pool:Seq[String])(implicit config:Config) extends RpcPo
     session
   }
 
+  if(pool.size == 0)
+    throw new Exception(s"empty RPC pool")
+
   // persistant pool
   val session = new RpcSessionLoadBalance(pool,config.rpcFailback, config.rpcRetry,config.rpcLaps)
 }

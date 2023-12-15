@@ -31,8 +31,8 @@ case class Config(
 
   //rpc:Seq[String]=Seq("http://localhost:8300"),
   
-  cacheTTL:Long = 10 * 9000L,
-  cacheGC:Long = 10 * 60 * 1000L,
+  cacheTTL:Long = 10000L,
+  cacheGC:Long = 30000L,
   
   rpcThreads:Int = 4,  
   rpcTimeout:Long = 150L,
@@ -61,11 +61,11 @@ object App extends skel.Server {
         ArgInt('p', "http.port",s"listern port (def: ${d.port})"),
         ArgString('u', "http.uri",s"api uri (def: ${d.uri})"),
 
-        ArgString('d', "datastore",s"Datastore [none://,rpc://] (def: ${d.datastore})"),
-        ArgString('c', "cache",s"Cache [none,time://] (def: ${d.cache})"),
+        ArgString('d', "datastore",s"Datastore [none://,rpc://] (def: ${d.datastore})"),        
         ArgString('_', "pool",s"Cache [sticky://,lb://] (def: ${d.pool})"),
         //ArgString('_', "rpc",s"RPC hosts (def: ${d.rpc})"),
         
+        ArgString('c', "cache.type",s"Cache [none,time://] (def: ${d.cache})"),
         ArgLong('_', "cache.gc",s"Cache GC interval, msec (def: ${d.cacheGC})"),
         ArgLong('_', "cache.ttl",s"Cache TTL, msec (def: ${d.cacheTTL})"),
         
@@ -89,11 +89,11 @@ object App extends skel.Server {
       port = c.getInt("http.port").getOrElse(d.port),
       uri = c.getString("http.uri").getOrElse(d.uri),
       
-      datastore = c.getString("datastore").getOrElse(d.datastore),
-      cache = c.getString("cache").getOrElse(d.cache),
+      datastore = c.getString("datastore").getOrElse(d.datastore),      
       pool = c.getString("pool").getOrElse(d.pool),
       //rpc = c.getListString("rpc",d.rpc),
-            
+
+      cache = c.getString("cache.type").getOrElse(d.cache),      
       cacheGC = c.getLong("cache.gc").getOrElse(d.cacheGC),
       cacheTTL = c.getLong("cache.ttl").getOrElse(d.cacheTTL),
 
@@ -112,7 +112,7 @@ object App extends skel.Server {
     Console.err.println(s"Config: ${config}")
     Console.err.println(s"RPC: ${config.rpc}")
     
-    implicit val cache = config.cache.split("://").toList match {      
+    implicit val cache = try { config.cache.split("://").toList match {      
       case "expire" :: time :: _ => new ProxyCacheExpire(time.toLong)
       case "expire" :: Nil => new ProxyCacheExpire(config.cacheTTL,config.cacheGC)
       case "none" :: Nil => new ProxyCacheNone()
@@ -120,9 +120,13 @@ object App extends skel.Server {
         Console.err.println(s"Uknown cache: '${config.cache}'")
         sys.exit(1)
       }
+    }} catch {
+      case e:Exception =>
+        log.error(s"Failed to create cache",e)
+        sys.exit(1)
     }
     
-    val pool = config.pool.split("://").toList match {
+    val pool = try { config.pool.split("://").toList match {
       case "http" ::  uri => new RpcPoolSticky(("http://"+uri.mkString("://")).split(",").toSeq)
       case "https" ::  uri => new RpcPoolSticky(("https://"+uri.mkString("://")).split(",").toSeq)
 
@@ -137,9 +141,13 @@ object App extends skel.Server {
         Console.err.println(s"Uknown pool: '${config.pool}'")
         sys.exit(1)
       }
+    }} catch {
+      case e:Exception =>
+        log.error(s"Failed to create pool",e)
+        sys.exit(1)
     }    
 
-    val store = config.datastore.split("://").toList match {          
+    val store = try { config.datastore.split("://").toList match {          
       //case "dir" :: dir ::  _ => new ProxyStoreDir(dir)
       case "simple" :: Nil => new ProxyStoreRcpSimple(pool)
       case "simple" :: uri => new ProxyStoreRcpSimple(pool)
@@ -150,9 +158,12 @@ object App extends skel.Server {
       case _ => 
         Console.err.println(s"Uknown datastore: '${config.datastore}'")
         sys.exit(1)      
+    }} catch {
+      case e:Exception =>
+        log.error(s"Failed to create store",e)
+        sys.exit(1)
     }
     
-
     config.cmd match {
       case "server" => 
                 

@@ -38,6 +38,7 @@ class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L) extends ProxyCach
       //log.info(s"GC: ${cache.size}")
       var n = 0
       val now = System.currentTimeMillis()
+      val sz = cache.size
       cache.foreach{ case(k,v) => {
         if(now - v.ts >= ttl) {
           cache.remove(k)
@@ -45,7 +46,7 @@ class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L) extends ProxyCach
         }
       }}
 
-      log.info(s"GC: ${cache.size}: removed=${n}")
+      log.info(s"GC: size=${sz}: removed=${n}")
       true
     },
     FiniteDuration(gcFreq,TimeUnit.MILLISECONDS),
@@ -55,9 +56,8 @@ class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L) extends ProxyCach
   cron.start()
   
   def find(key:String):Option[String] = {
-    log.debug(s"find: ${key}")
-        
-    cache.get(key) match {
+            
+    val rsp = cache.get(key) match {
       case Some(c) =>
         val now = System.currentTimeMillis()
         if( now - c.ts < ttl ) {
@@ -73,12 +73,16 @@ class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L) extends ProxyCach
         metricCacheMissCount.inc
         None
     }
+
+    log.debug(s"find: ${key} -> ${rsp}")
+    rsp
   }
 
   def cache(key:String,rsp:String):String = {
     import ProxyJson._
 
     val now = System.currentTimeMillis()
+    log.debug(s"cache: ${key}")
     cache.put(key,CacheRsp(now,rsp))
 
     // save special case of "latest" block

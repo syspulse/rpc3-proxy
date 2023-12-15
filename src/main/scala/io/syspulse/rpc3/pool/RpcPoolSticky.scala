@@ -80,4 +80,7 @@ class RpcPoolSticky(pool:Seq[String])(implicit config:Config) extends RpcPool {
 
   // persistant pool
   val sticky = new RpcSessionSticky(pool,config.rpcRetry,config.rpcLaps)
+
+  if(pool.size == 0)
+    throw new Exception(s"empty RPC pool")
 }
