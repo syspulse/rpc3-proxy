@@ -32,7 +32,6 @@ class RpcSessionLoadBalance(pool:Seq[String],rpcFailback:Long = 10000L, maxRetry
       return pool(f)
     }
     
-    // get next healthy
     val rpc = pool(i)
     i0 = i
     
@@ -48,11 +47,13 @@ class RpcSessionLoadBalance(pool:Seq[String],rpcFailback:Long = 10000L, maxRetry
         // no available, continue with current
         l = l + 1
         r = maxRetry
+        
         return rpc
         
-      case h :: _ => h  // get the next non failed one
-    } 
-    
+      case h :: _ =>         
+        h  // get the next non failed one
+    }
+
     // marked as non-failed, error will fail it
     failedNodes(i) = 0L
 
@@ -78,6 +79,7 @@ class RpcSessionLoadBalance(pool:Seq[String],rpcFailback:Long = 10000L, maxRetry
   }
   
   def available:Boolean = this.synchronized {
+    //println(s"=======> ${l},${maxLaps}")
     l < maxLaps
   }  
   

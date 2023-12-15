@@ -27,7 +27,9 @@ case class Config(
 
   datastore:String = "rpc://",
   cache:String = "expire://",
-  pool:String = "sticky://http://localhost:8300,http://localhost:8301",
+  pool:String = "sticky://", //"sticky://http://localhost:8300,http://localhost:8301",
+
+  //rpc:Seq[String]=Seq("http://localhost:8300"),
   
   cacheTTL:Long = 10 * 9000L,
   cacheGC:Long = 10 * 60 * 1000L,
@@ -41,7 +43,7 @@ case class Config(
   
   
   cmd:String = "server",
-  params: Seq[String] = Seq(),
+  rpc: Seq[String] = Seq("http://localhost:8300"),
 )
 
 object App extends skel.Server {
@@ -61,7 +63,8 @@ object App extends skel.Server {
 
         ArgString('d', "datastore",s"Datastore [none://,rpc://] (def: ${d.datastore})"),
         ArgString('c', "cache",s"Cache [none,time://] (def: ${d.cache})"),
-        ArgString('_', "pool",s"Cache [fastfail://] (def: ${d.pool})"),
+        ArgString('_', "pool",s"Cache [sticky://,lb://] (def: ${d.pool})"),
+        //ArgString('_', "rpc",s"RPC hosts (def: ${d.rpc})"),
         
         ArgLong('_', "cache.gc",s"Cache GC interval, msec (def: ${d.cacheGC})"),
         ArgLong('_', "cache.ttl",s"Cache TTL, msec (def: ${d.cacheTTL})"),
@@ -76,7 +79,7 @@ object App extends skel.Server {
         
         ArgCmd("server","Command"),
         ArgCmd("client","Command"),
-        ArgParam("<params>",""),
+        ArgParam("<rpc,...>","List of RPC nodes (added to --pool)"),
         ArgLogging()
       ).withExit(1)
     )).withLogging()
@@ -89,6 +92,7 @@ object App extends skel.Server {
       datastore = c.getString("datastore").getOrElse(d.datastore),
       cache = c.getString("cache").getOrElse(d.cache),
       pool = c.getString("pool").getOrElse(d.pool),
+      //rpc = c.getListString("rpc",d.rpc),
             
       cacheGC = c.getLong("cache.gc").getOrElse(d.cacheGC),
       cacheTTL = c.getLong("cache.ttl").getOrElse(d.cacheTTL),
@@ -102,10 +106,11 @@ object App extends skel.Server {
       rpcFailback = c.getLong("rpc.failback").getOrElse(d.rpcFailback),
       
       cmd = c.getCmd().getOrElse(d.cmd),
-      params = c.getParams(),
+      rpc = c.getParams(),
     )
 
     Console.err.println(s"Config: ${config}")
+    Console.err.println(s"RPC: ${config.rpc}")
     
     implicit val cache = config.cache.split("://").toList match {      
       case "expire" :: time :: _ => new ProxyCacheExpire(time.toLong)
@@ -120,6 +125,11 @@ object App extends skel.Server {
     val pool = config.pool.split("://").toList match {
       case "http" ::  uri => new RpcPoolSticky(("http://"+uri.mkString("://")).split(",").toSeq)
       case "https" ::  uri => new RpcPoolSticky(("https://"+uri.mkString("://")).split(",").toSeq)
+
+      case "sticky" ::  Nil => new RpcPoolSticky(config.rpc)
+      case "lb" :: Nil => new RpcPoolLoadBalance(config.rpc)
+      case "pool" :: Nil => new RpcPoolSticky(config.rpc)
+      
       case "sticky" ::  uri => new RpcPoolSticky(uri.mkString("://").split(",").toSeq)
       case "lb" :: uri => new RpcPoolLoadBalance(uri.mkString("://").split(",").toSeq)
       case "pool" :: uri => new RpcPoolSticky(uri.mkString("://").split(",").toSeq)
