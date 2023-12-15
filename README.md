@@ -38,6 +38,13 @@ The size of cache is not limited, use `gc` option
 ./run-rpc3.sh --pool=lb://http://geth-1:8545,http://geth-2:8545
 ```
 
+It is possible to specify rpc nodes as free arguments:
+
+```
+./run-rpc3.sh --pool=lb:// http://geth-1 http://reth-2 http://node-3
+```
+
+
 
 ### Testing fail-over scenario
 
