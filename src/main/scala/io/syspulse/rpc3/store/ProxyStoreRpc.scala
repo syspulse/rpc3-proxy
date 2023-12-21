@@ -176,7 +176,13 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
         // save to cache only on missed 
         for {
           r0 <- proxy(req)
-          _ <- Future(cache.cache(key,r0))
+          _ <- {            
+            if(isError(Some(r0))) {
+              log.warn(s"uncache: ${r0}")
+              Future(r0)
+            } else
+              Future(cache.cache(key,r0))
+          }
         } yield r0
 
       case Some(rsp) => 
@@ -210,4 +216,12 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
   }
 
   def batch(req:String):Future[String]
+
+  def isError(res:Option[String]):Boolean = {
+    if(! res.isDefined) 
+      return true
+    else {
+      res.get.contains(""""error": {"code":""")
+    }
+  }
 }

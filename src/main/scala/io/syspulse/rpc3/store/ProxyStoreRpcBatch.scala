@@ -33,8 +33,7 @@ import akka.http.scaladsl.model.ContentTypes
 import io.syspulse.rpc3.cache.ProxyCache
 import io.syspulse.rpc3.pool.RpcPool
 
-class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
-  extends ProxyStoreRcp(pool)(config,cache) {
+class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) extends ProxyStoreRcp(pool)(config,cache) {
   
   import ProxyJson._
 
@@ -96,6 +95,7 @@ class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache)
               //log.error(s"response size=${r.size}, expected=${reqUnCached.size}")
               throw new Exception(s"response size=${r.size}, expected=${reqUnCached.size}")
             }
+            
             r
           case f @ Failure(e) => 
             //log.error(s"failed to parse Rpc response: ${e}")
@@ -116,15 +116,25 @@ class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache)
             fresh(i)
           }
         })
+        
         Future(all)
       }
       _ <- {
         // Insert fresh -> Cache
         var i = -1
         rspUnCached.foreach( r => {
-          val key = getKey(r._1)
-          i = i + 1
-          cache.cache(key,fresh(i))
+          
+          val req = r._1
+          val rsp = r._2
+
+          // don't cache error
+          if(isError(rsp)) {
+            log.warn(s"uncache: ${rsp}")
+          } else {
+            val key = getKey(req)
+            i = i + 1
+            cache.cache(key,fresh(i))
+          }
         })
         Future(all)
       }
