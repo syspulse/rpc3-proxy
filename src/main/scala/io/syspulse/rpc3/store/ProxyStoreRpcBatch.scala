@@ -92,6 +92,10 @@ class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
           case Success(r) => 
             // chehc that response contains the same number in batch
             if(r.size != reqUnCached.size) {
+              // check for special case of size == 1 (high probability is just single error message)
+              if(r.size == 1) {
+                log.warn(s"res: ${reqUnCached(0)}")
+              }
               //log.error(s"response size=${r.size}, expected=${reqUnCached.size}")
               throw new Exception(s"response size=${r.size}, expected=${reqUnCached.size}")
             }
@@ -100,7 +104,7 @@ class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
           case f @ Failure(e) => 
             //log.error(s"failed to parse Rpc response: ${e}")
             //Vector[JsValue]()
-            throw new Exception(s"failed to parse Rpc response: ${e}")
+            throw new Exception(s"failed to parse RPC response: ${e}")
         }
         // convert to Array[String]
         val fresh = rawJs.map(_.compactPrint)
