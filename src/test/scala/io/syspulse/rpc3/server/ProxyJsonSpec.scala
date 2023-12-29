@@ -25,8 +25,8 @@ class ProxyJsonSpec extends AnyWordSpec with Matchers {
       info(s"${ff}")
       
       val id = ff("id")
-      id.toString === ("100000")
-      id.asInstanceOf[JsNumber] === (JsNumber(100000))
+      id.toString should === ("100000")
+      id.asInstanceOf[JsNumber] should === (JsNumber(100000))
 
       val result = ff("result")
       info(s"result=${result.compactPrint}")

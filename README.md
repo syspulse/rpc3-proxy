@@ -1,4 +1,4 @@
-# rpc3-proxy
+# squid3
 
 Caching Proxy for EVM RPC.
 

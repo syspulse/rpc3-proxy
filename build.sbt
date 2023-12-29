@@ -296,7 +296,7 @@ def appAssemblyConfig(appName:String,appMainClass:String) =
 
 
 // ======================================================================================================================
-lazy val rpc3_proxy = (project in file("."))
+lazy val squid = (project in file("."))
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(DockerPlugin)
   .enablePlugins(AshScriptPlugin)
@@ -307,7 +307,7 @@ lazy val rpc3_proxy = (project in file("."))
     sharedConfigDocker,
     dockerBuildxSettings,
 
-    appDockerConfig("rpc3-proxy","io.syspulse.rpc3.App"),
+    appDockerConfig("squid3","io.syspulse.rpc3.App"),
 
     libraryDependencies ++= libSkel ++ Seq(  
 
