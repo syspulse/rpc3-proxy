@@ -48,7 +48,7 @@ import io.syspulse.skel.service.CommonRoutes
 
 import io.syspulse.skel.Command
 
-// import io.syspulse.skel.auth.permissions.rbac.Permissions
+// import io.syspulse.skel.auth.permissions.Permissions
 // import io.syspulse.skel.auth.RouteAuthorizers
 
 import io.syspulse.rpc3._

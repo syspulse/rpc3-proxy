@@ -296,7 +296,7 @@ def appAssemblyConfig(appName:String,appMainClass:String) =
 
 
 // ======================================================================================================================
-lazy val squid = (project in file("."))
+lazy val squid3 = (project in file("."))
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(DockerPlugin)
   .enablePlugins(AshScriptPlugin)
