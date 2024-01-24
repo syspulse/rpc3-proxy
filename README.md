@@ -7,14 +7,15 @@ Caching Proxy for EVM RPC.
 - Proxy supports `latest` to cache it as `block number`
 
 - Cache is controlled:
-   - ttl : time to live for one request
-   - gc: Garbage collection for expired requests
+   - `cach.ttl` : time to live for response. 
+   - `cache.latest` : time to live to `latest` block response. Special case which can control how Cache may *lag* behind. It should be generally set to the Block interval (e.g. 12000 for Ethereum)
+   - `cache.gc`: Garbage Collection for expired requests
 
 - Multiple RPC nodes Pool:
    - __lb__ : load-balancing round-robin with periodic retry of failed
    - __sticky__: stays on healthy node and does not fail-back
 
-The size of cache is not limited, use `gc` option
+The size of cache is not limited, use `cache.gc` option
 
 
 ## Run 

@@ -31,9 +31,9 @@ case class Config(
 
   //rpc:Seq[String]=Seq("http://localhost:8300"),
   
-  cacheLatest:Long = 12000L,        // ttl for `latest`
-  cacheGC:Long = 60000L,            // 
   cacheTTL:Long = 30000L,           // ttl for history (non-latest)
+  cacheLatest:Long = 12000L,        // ttl for `latest`
+  cacheGC:Long = 60000L,            //   
   
   rpcThreads:Int = 4,  
   rpcTimeout:Long = 150L,
@@ -96,10 +96,10 @@ object App extends skel.Server {
       pool = c.getString("pool").getOrElse(d.pool),
       //rpc = c.getListString("rpc",d.rpc),
 
-      cache = c.getString("cache.type").getOrElse(d.cache),      
-      cacheGC = c.getLong("cache.gc").getOrElse(d.cacheGC),
+      cache = c.getString("cache.type").getOrElse(d.cache),            
       cacheTTL = c.getLong("cache.ttl").getOrElse(d.cacheTTL),
       cacheLatest = c.getLong("cache.latest").getOrElse(d.cacheLatest),
+      cacheGC = c.getLong("cache.gc").getOrElse(d.cacheGC),
 
       rpcTimeout = c.getLong("rpc.timeout").getOrElse(d.rpcTimeout),
       
