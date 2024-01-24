@@ -24,9 +24,9 @@ import io.syspulse.rpc3.server.{ProxyRpcBlockRes,ProxyRpcBlockResultRes}
 import io.syspulse.rpc3.server.ProxyJson
 import io.syspulse.rpc3.server.ProxyRpcBlockNumberRes
 
-case class CacheRsp(ts:Long,rsp:String,history:Boolean = false)
+case class CacheRsp(ts:Long,rsp:String,latest:Boolean = true)
 
-class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L,ttlHistory:Long = 30000L) extends ProxyCache {
+class ProxyCacheExpire(ttl:Long = 30000L,ttlLatest:Long = 10000L,gcFreq:Long = 10000L) extends ProxyCache {
   val log = Logger(s"${this}")
 
   val metricCacheSizeCount: Counter = Counter.build().name("rpc3_cache_size").help("Cache size").register(TelemetryRegistry.registry)
@@ -43,9 +43,9 @@ class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L,ttlHistory:Long = 
       val now = System.currentTimeMillis()
       
       cache.foreach{ case(k,v) => {
-        if(now - v.ts >= {if(v.history) ttlHistory else ttl}) {
+        if(now - v.ts >= {if(v.latest) ttlLatest else ttl}) {
           cache.remove(k)
-          if(v.history) nCold = nCold + 1 else nHot = nHot + 1
+          if(v.latest) nHot = nHot + 1 else nCold = nCold + 1
         }
       }}
 
@@ -64,7 +64,7 @@ class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L,ttlHistory:Long = 
     val rsp = cache.get(key) match {
       case Some(c) =>
         val now = System.currentTimeMillis()
-        if( now - c.ts < ttl ) {
+        if( now - c.ts < {if(c.latest) ttlLatest else ttl} ) {
           metricCacheHitCount.inc
           Some(c.rsp)
         } else {
@@ -109,6 +109,7 @@ class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L,ttlHistory:Long = 
       if(block != "") {
         val keyBlock = key.replaceAll("latest",block)        
         log.debug(s"latest: ${block} => Cache[${keyBlock}]")
+
         cache.put(keyBlock,CacheRsp(now,rsp))
       }
 

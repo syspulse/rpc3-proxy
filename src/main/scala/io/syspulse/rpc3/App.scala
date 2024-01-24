@@ -31,8 +31,9 @@ case class Config(
 
   //rpc:Seq[String]=Seq("http://localhost:8300"),
   
-  cacheTTL:Long = 10000L,
-  cacheGC:Long = 30000L,
+  cacheLatest:Long = 12000L,        // ttl for `latest`
+  cacheGC:Long = 60000L,            // 
+  cacheTTL:Long = 30000L,           // ttl for history (non-latest)
   
   rpcThreads:Int = 4,  
   rpcTimeout:Long = 150L,
@@ -65,9 +66,10 @@ object App extends skel.Server {
         ArgString('_', "pool",s"Cache [sticky://,lb://] (def: ${d.pool})"),
         //ArgString('_', "rpc",s"RPC hosts (def: ${d.rpc})"),
         
-        ArgString('c', "cache.type",s"Cache [none,time://] (def: ${d.cache})"),
+        ArgString('c', "cache.type",s"Cache [none,time://] (def: ${d.cache})"),        
+        ArgLong('_', "cache.ttl",s"Cache TTL for Historical data (non-latest), msec (def: ${d.cacheTTL})"),
+        ArgLong('_', "cache.latest",s"Cache TTL for Latest data, msec (def: ${d.cacheLatest})"),
         ArgLong('_', "cache.gc",s"Cache GC interval, msec (def: ${d.cacheGC})"),
-        ArgLong('_', "cache.ttl",s"Cache TTL, msec (def: ${d.cacheTTL})"),
         
         ArgLong('_', "rpc.timeout",s"RPC Timeout (connect), msec (def: ${d.rpcTimeout})"),
         
@@ -79,7 +81,7 @@ object App extends skel.Server {
         ArgLong('_',"rpc.throttle",s"Delay between Requests, msec (def: ${d.rpcThrottle})"),
         
         ArgCmd("server","Command"),
-        ArgCmd("client","Command"),
+        // ArgCmd("client","Command"),
         ArgParam("<rpc,...>","List of RPC nodes (added to --pool)"),
         ArgLogging()
       ).withExit(1)
@@ -97,6 +99,7 @@ object App extends skel.Server {
       cache = c.getString("cache.type").getOrElse(d.cache),      
       cacheGC = c.getLong("cache.gc").getOrElse(d.cacheGC),
       cacheTTL = c.getLong("cache.ttl").getOrElse(d.cacheTTL),
+      cacheLatest = c.getLong("cache.latest").getOrElse(d.cacheLatest),
 
       rpcTimeout = c.getLong("rpc.timeout").getOrElse(d.rpcTimeout),
       
@@ -114,9 +117,11 @@ object App extends skel.Server {
     Console.err.println(s"Config: ${config}")
     Console.err.println(s"RPC: ${config.rpc}")
     
-    implicit val cache = try { config.cache.split("://").toList match {      
-      case "expire" :: time :: _ => new ProxyCacheExpire(time.toLong)
-      case "expire" :: Nil => new ProxyCacheExpire(config.cacheTTL,config.cacheGC)
+    implicit val cache = try { config.cache.split("://").toList match { 
+      case "expire" :: ttl :: ttlLatest :: freq :: Nil => new ProxyCacheExpire(ttl.toLong,ttlLatest.toLong,freq.toLong)
+      case "expire" :: ttl :: ttlLatest :: _ => new ProxyCacheExpire(ttl.toLong,ttlLatest.toLong,config.cacheGC)
+      case "expire" :: ttl :: _ => new ProxyCacheExpire(ttl.toLong)
+      case "expire" :: Nil => new ProxyCacheExpire(config.cacheTTL,config.cacheLatest,config.cacheGC)
       case "none" :: Nil => new ProxyCacheNone()
       case _ => {        
         Console.err.println(s"Uknown cache: '${config.cache}'")
