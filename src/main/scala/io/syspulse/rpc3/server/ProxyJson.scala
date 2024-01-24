@@ -20,5 +20,5 @@ object ProxyJson extends JsonCommon {
   
   implicit val jf_rpc_block_result_rsp = jsonFormat1(ProxyRpcBlockResultRes)
   implicit val jf_rpc_block_rsp = jsonFormat3(ProxyRpcBlockRes)
-  
+  implicit val jf_rpc_block_num_rsp = jsonFormat3(ProxyRpcBlockNumberRes)
 }

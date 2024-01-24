@@ -22,10 +22,11 @@ import io.syspulse.skel.service.telemetry.TelemetryRegistry
 import spray.json._
 import io.syspulse.rpc3.server.{ProxyRpcBlockRes,ProxyRpcBlockResultRes}
 import io.syspulse.rpc3.server.ProxyJson
+import io.syspulse.rpc3.server.ProxyRpcBlockNumberRes
 
-case class CacheRsp(ts:Long,rsp:String)
+case class CacheRsp(ts:Long,rsp:String,history:Boolean = false)
 
-class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L) extends ProxyCache {
+class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L,ttlHistory:Long = 30000L) extends ProxyCache {
   val log = Logger(s"${this}")
 
   val metricCacheSizeCount: Counter = Counter.build().name("rpc3_cache_size").help("Cache size").register(TelemetryRegistry.registry)
@@ -36,17 +37,20 @@ class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L) extends ProxyCach
 
   val cron = new CronFreq(() => {
       //log.info(s"GC: ${cache.size}")
-      var n = 0
+      var nHot = 0
+      var nCold = 0
+
       val now = System.currentTimeMillis()
-      val sz = cache.size
+      
       cache.foreach{ case(k,v) => {
-        if(now - v.ts >= ttl) {
+        if(now - v.ts >= {if(v.history) ttlHistory else ttl}) {
           cache.remove(k)
-          n = n + 1
+          if(v.history) nCold = nCold + 1 else nHot = nHot + 1
         }
       }}
 
-      log.info(s"GC: size=${sz}: removed=${n}")
+      val sz = cache.size      
+      log.info(s"GC: size=${sz}: removed=(${nHot},${nCold})")
       true
     },
     FiniteDuration(gcFreq,TimeUnit.MILLISECONDS),
@@ -83,24 +87,34 @@ class ProxyCacheExpire(ttl:Long = 10000L,gcFreq:Long = 10000L) extends ProxyCach
 
     val now = System.currentTimeMillis()
     log.debug(s"cache: ${key}")
-    cache.put(key,CacheRsp(now,rsp))
+    
 
     // save special case of "latest" block
-    val latest = key.startsWith(ProxyCache.getKey("eth_getBlockByNumber",Seq("latest")).stripSuffix(")"))
-    if(latest) {
-      try {
-        val block = rsp.parseJson.convertTo[ProxyRpcBlockRes].result.number
-                
-        val keyBlock = key.replaceAll("latest",block)
-        
-        log.debug(s"latest: ${block} => Cache[${keyBlock}]")
+    val latest1 = key.startsWith(ProxyCache.getKey("eth_getBlockByNumber",Seq("latest")).stripSuffix(")"))       
+    val latest2 = latest1 || key.startsWith(ProxyCache.getKey("eth_blockNumber",Seq("latest")).stripSuffix(")"))
 
-        cache.put(keyBlock,CacheRsp(now,rsp))
+    // save to cache with NOT latest as history
+    cache.put(key,CacheRsp(now,rsp,! (latest1 || latest2)))    
 
-      } catch {
-        case e:Exception =>
-          log.warn(s"could not parse latest: ",e)
+    try {
+      val block:String = 
+      if(latest1) {
+        rsp.parseJson.convertTo[ProxyRpcBlockRes].result.number                    
       }
+      else if(latest2) {
+        rsp.parseJson.convertTo[ProxyRpcBlockNumberRes].result          
+      } 
+      else ""
+
+      if(block != "") {
+        val keyBlock = key.replaceAll("latest",block)        
+        log.debug(s"latest: ${block} => Cache[${keyBlock}]")
+        cache.put(keyBlock,CacheRsp(now,rsp))
+      }
+
+    } catch {
+      case e:Exception =>
+        log.warn(s"could not parse latest: ",e)
     }
 
     metricCacheSizeCount.inc()

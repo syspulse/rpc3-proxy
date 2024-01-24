@@ -14,7 +14,10 @@ final case class ProxyRpcRes(jsonrpc:String,result:Any,id:Any)
 
 // {"jsonrpc": "2.0", "error": {"code": -32601, "message": "Method not found"}, "id": "5"}
 
-// {"jsonrpc":"2.0","id":1,"result":{"hash":"0xa851cc422","number":"0x0",tx=[{"i":0},{"i":1}]},"id": 100000}
+// eth_blockNumber: {"jsonrpc":"2.0","id":1,"result":"0x1231992"}
+final case class ProxyRpcBlockNumberRes(jsonrpc:String,result:String,id:Any)
+
+// eth_getBlockByNumber: {"jsonrpc":"2.0","id":1,"result":{"hash":"0xa851cc422","number":"0x0",tx=[{"i":0},{"i":1}]},"id": 100000}
 // interested only in 'number'
 final case class ProxyRpcBlockResultRes(number:String)
 final case class ProxyRpcBlockRes(jsonrpc:String,result:ProxyRpcBlockResultRes,id:Any)
