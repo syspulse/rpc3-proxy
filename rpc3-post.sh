@@ -4,7 +4,7 @@ SERVICE_URI=${SERVICE_URI:-http://localhost:8080/api/v1/rpc3}
 
 DATA_JSON=${1:-REQ_latest.json}
 BLOCK=${2:-latest}
-COUNT=${COUNT:-1}
+COUNT=${COUNT:-0}
 SLEEP=${SLEEP:-0}
 ID=${ID:-5}
 
