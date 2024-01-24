@@ -42,6 +42,27 @@ import scala.concurrent.Await
 import io.syspulse.rpc3.pool.RpcPool
 import io.syspulse.rpc3.pool.RpcSession
 
+object Throttler {
+  val BGL = new Object()
+}
+
+class Throttler(throttle:Long, bgl:Boolean=true) {
+  def block():Unit = {
+    if(throttle == 0L) return
+
+    // throttler is global
+    if(bgl) {
+      Throttler.BGL.synchronized {
+        Thread.sleep(throttle)
+      }
+    } else {
+      this.synchronized {
+        Thread.sleep(throttle)
+      }
+    }
+  }
+}
+
 abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCache) extends ProxyStore {
   val log = Logger(s"${this}")
   
@@ -53,6 +74,7 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
   implicit val as: ActorSystem = ActorSystem("proxy")
 
   implicit val sched = as.scheduler
+  val throttler = new Throttler(config.rpcThrottle)
 
   def retry_1_deterministic(as:ActorSystem,timeout:FiniteDuration) = ConnectionPoolSettings(as)
                           .withBaseConnectionBackoff(FiniteDuration(1000,TimeUnit.MILLISECONDS))
@@ -140,7 +162,10 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
     
   // --------------------------------------------------------------------------------- Proxy ---
   def rpc1(uri:String,req:String) = {
-    log.info(s"${req.take(80)} --> ${uri}")
+    log.info(s"${req.take(85)} --> ${uri}")
+
+    // throttle here if neccessary
+    throttler.block()
 
     lazy val http = Http()
     .singleRequest(HttpRequest(HttpMethods.POST,uri, entity = HttpEntity(ContentTypes.`application/json`,req)),

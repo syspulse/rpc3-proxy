@@ -26,8 +26,8 @@ object Dependencies {
     lazy val elastic4sVersion = "7.17.3"
     
 
-    lazy val skelVersion = "0.0.7"
-    lazy val appVersion = "0.0.2"
+    lazy val skelVersion = "0.0.8"
+    lazy val appVersion = "0.0.3"
 
     lazy val jarPrefix = "server-"
     

@@ -38,7 +38,7 @@ object ProxyRegistry {
         f.onComplete(r => r match {
           case Success(rsp) => replyTo ! Success(rsp)
           case fail @ Failure(e) => 
-            log.error(s"${e}")
+            log.error(s"${e.getMessage()}",e)
             replyTo ! fail
         })
 

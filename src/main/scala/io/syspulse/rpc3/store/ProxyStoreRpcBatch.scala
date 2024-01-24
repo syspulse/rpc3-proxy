@@ -125,19 +125,21 @@ class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
       }
       _ <- {
         // Insert fresh -> Cache
-        var i = -1
-        rspUnCached.foreach( r => {
+        var i = 0
+        fresh.foreach( r => {
           
-          val req = r._1
-          val rsp = r._2
+          val req = rspUnCached(i)._1
+          // ideally response should match 'id'
+          val rsp = Some(r)
 
+          log.debug(s"${req} => ${rsp}")
           // don't cache error
           if(isError(rsp)) {
             log.warn(s"uncache: ${rsp}")
           } else {
-            val key = getKey(req)
-            i = i + 1
+            val key = getKey(req)            
             cache.cache(key,fresh(i))
+            i = i + 1
           }
         })
         Future(all)
