@@ -56,6 +56,7 @@ import io.syspulse.rpc3.store.ProxyRegistry
 import io.syspulse.rpc3.store.ProxyRegistry._
 import io.syspulse.rpc3.server._
 import io.syspulse.skel.service.telemetry.TelemetryRegistry
+import akka.http.scaladsl.server.AuthorizationFailedRejection
 
 @Path("/")
 class ProxyRoutes(registry: ActorRef[Command])(implicit context: ActorContext[_],config:Config) extends CommonRoutes with Routeable {
@@ -93,24 +94,33 @@ class ProxyRoutes(registry: ActorRef[Command])(implicit context: ActorContext[_]
   override def routes: Route = cors(corsAllow) {
       concat(
         pathEndOrSingleSlash {
-          concat(            
-            // getProxysRoute() ~
-            rpcRoute
-          )
+          if(config.apiKey.isBlank())
+            concat(            
+              rpcRoute
+            )
+          else
+            reject(AuthorizationFailedRejection)
         },
-        // pathPrefix(Segment) { id => 
-        //   pathEndOrSingleSlash {
-        //     authenticate()(authn =>
-        //       authorize(Permissions.isProxy(UUID(id),authn) || Permissions.isAdmin(authn) || Permissions.isService(authn)) {
-        //         updateProxyRoute(id) ~
-        //         getProxyRoute(id)                 
-        //       } ~
-        //       authorize(Permissions.isAdmin(authn) || Permissions.isService(authn)) {
-        //         deleteProxyRoute(id)
-        //       }
-        //     ) 
-        //   }
-        // }
+        pathPrefix(Segment) { apiKey => 
+          pathEndOrSingleSlash {
+            if(config.apiKey == apiKey)
+              concat(
+                rpcRoute
+              )
+            else
+              reject(AuthorizationFailedRejection)
+
+            // authenticate()(authn =>
+            //   authorize(Permissions.isProxy(UUID(id),authn) || Permissions.isAdmin(authn) || Permissions.isService(authn)) {
+            //     updateProxyRoute(id) ~
+            //     getProxyRoute(id)                 
+            //   } ~
+            //   authorize(Permissions.isAdmin(authn) || Permissions.isService(authn)) {
+            //     deleteProxyRoute(id)
+            //   }
+            // ) 
+          }
+        }
       )
   }
 }

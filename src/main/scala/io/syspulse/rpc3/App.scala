@@ -42,6 +42,8 @@ case class Config(
   rpcDelay:Long = 1000L,
   rpcFailback:Long = 10000L,
   rpcThrottle:Long = 0L,
+
+  apiKey:String = "", // suffix to url (api key)
   
   cmd:String = "server",
   rpc: Seq[String] = Seq("http://localhost:8300"),
@@ -66,7 +68,7 @@ object App extends skel.Server {
         ArgString('_', "pool",s"Cache [sticky://,lb://] (def: ${d.pool})"),
         //ArgString('_', "rpc",s"RPC hosts (def: ${d.rpc})"),
         
-        ArgString('c', "cache.type",s"Cache [none,time://] (def: ${d.cache})"),        
+        ArgString('c', "cache.type",s"Cache [none,time://] (def: ${d.cache})"),
         ArgLong('_', "cache.ttl",s"Cache TTL for Historical data (non-latest), msec (def: ${d.cacheTTL})"),
         ArgLong('_', "cache.latest",s"Cache TTL for Latest data, msec (def: ${d.cacheLatest})"),
         ArgLong('_', "cache.gc",s"Cache GC interval, msec (def: ${d.cacheGC})"),
@@ -79,6 +81,8 @@ object App extends skel.Server {
         ArgLong('_',"rpc.delay",s"Delay between retry, msec (def: ${d.rpcDelay})"),
         ArgLong('_',"rpc.failback",s"Delay between failback retry (to previously failed node), msec (def: ${d.rpcFailback})"),
         ArgLong('_',"rpc.throttle",s"Delay between Requests, msec (def: ${d.rpcThrottle})"),
+
+        ArgString('_', "api.key",s"Cache [none,time://] (def: ${d.cache})"),
         
         ArgCmd("server","Command"),
         // ArgCmd("client","Command"),
@@ -109,6 +113,8 @@ object App extends skel.Server {
       rpcDelay = c.getLong("rpc.delay").getOrElse(d.rpcDelay),
       rpcFailback = c.getLong("rpc.failback").getOrElse(d.rpcFailback),
       rpcThrottle = c.getLong("rpc.throttle").getOrElse(d.rpcThrottle),
+
+      apiKey = c.getString("api.key").getOrElse(d.apiKey),
       
       cmd = c.getCmd().getOrElse(d.cmd),
       rpc = c.getParams(),

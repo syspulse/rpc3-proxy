@@ -17,6 +17,18 @@ Caching Proxy for EVM RPC.
 
 The size of cache is not limited, use `cache.gc` option
 
+## Authorization
+
+### Url key
+
+Simple style url suffix configured with `--api.key=<KEY>`
+
+```
+./run-rpc3.sh --api.key=1111
+
+curl http://localhost:8080/api/v1/rpc3/1111
+```
+
 
 ## Run 
 
