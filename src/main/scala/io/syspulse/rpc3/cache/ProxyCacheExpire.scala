@@ -50,7 +50,7 @@ class ProxyCacheExpire(ttl:Long = 30000L,ttlLatest:Long = 12000L,gcFreq:Long = 1
       }}
 
       val sz = cache.size      
-      log.info(s"GC: size=${sz}: removed=(${nHot},${nCold})")
+      log.info(s"GC: size=${sz}: removed=(${nHot},${nCold}), hit=${metricCacheHitCount.get()}, miss=${metricCacheMissCount.get}")
       true
     },
     FiniteDuration(gcFreq,TimeUnit.MILLISECONDS),
