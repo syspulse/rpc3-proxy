@@ -247,7 +247,9 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
       return true
     else {
       // fast and dirty
-      res.get.contains("""error""") && res.get.contains("""code""")
+      // this is checked agains every request.
+      (res.get.contains("""error""") && res.get.contains("""code""")) ||
+      (res.get.contains(""""result":null""") || res.get.contains(""""result": null"""))
     }
   }
 }
