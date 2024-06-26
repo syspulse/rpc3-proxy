@@ -100,3 +100,21 @@ Execute request:
 ```
 ./rpc3-post.sh REQ_Batch_latest-Tx.json
 ```
+
+### Testing Failed Batch resposnse
+
+This scenario simulates all 32000 in batch reponse and fail-over with retry
+
+```
+PORT=8300 ./http-server.sh RSP_Batch_error_32000.json
+PORT=8301 ./http-server.sh RSP_Batch_error_32000.json
+```
+
+```
+./run-rpc3.sh --pool=sticky:// http://localhost:8300 http://localhost:8301
+```
+
+Execute request:
+```
+./rpc3-post.sh REQ_Batch_latest-Tx.json
+```

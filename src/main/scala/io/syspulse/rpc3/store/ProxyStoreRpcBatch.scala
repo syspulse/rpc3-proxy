@@ -32,6 +32,7 @@ import akka.http.scaladsl.model.ContentTypes
 
 import io.syspulse.rpc3.cache.ProxyCache
 import io.syspulse.rpc3.pool.RpcPool
+import io.syspulse.rpc3.pool.RpcSession
 
 class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) extends ProxyStoreRcp(pool)(config,cache) {
   
@@ -50,7 +51,7 @@ class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
   }
 
 
-  def batch(req:String):Future[String] = {
+  def batch(uri:String,req:String,session:RpcSession):Future[String] = {
     val rr = decodeBatch(req)
         
     // prepare array for response with Cached and UnCached
@@ -79,9 +80,9 @@ class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
     val reqRpc = "[" + reqUnCached.mkString(",") + "]"
 
     // log.info(s"${reqRpc.take(80)} --> ${uri}")
-        
+      
     for {
-      rsp <- proxy(reqRpc)
+      rsp <- http(uri,reqRpc)
       fresh <- {
         // This step converts from JsonArray[JsonValue] -> Array[String]
         // It is required to have an index into New response assembly and cache
@@ -90,7 +91,7 @@ class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
         val rspParsed = parseBatchRawRes(rsp)
         val rawJs = rspParsed match {
           case Success(r) => 
-            // chehc that response contains the same number in batch
+            // check that response contains the same number in batch
             if(r.size != reqUnCached.size) {
               // check for special case of size == 1 (high probability is just single error message)
               if(r.size == 1) {
@@ -99,7 +100,7 @@ class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
               //log.error(s"response size=${r.size}, expected=${reqUnCached.size}")
               throw new Exception(s"response size=${r.size}, expected=${reqUnCached.size}")
             }
-            
+                        
             r
           case f @ Failure(e) => 
             //log.error(s"failed to parse Rpc response: ${e}")
@@ -126,6 +127,7 @@ class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
       _ <- {
         // Insert fresh -> Cache
         var i = 0
+        var e = 0
         fresh.foreach( r => {
           
           val req = rspUnCached(i)._1
@@ -135,11 +137,17 @@ class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
           log.debug(s"${req} => ${rsp}")
           // don't cache error
           if(isError(rsp)) {
+            e = e + 1
             log.warn(s"uncache: ${rsp}")
           } else {
             val key = getKey(req)            
             cache.cache(key,fresh(i))
             i = i + 1
+          }
+
+          if(e == reqUnCached.size) {
+            log.warn(s"all batch rsp failed: ${e}")
+            throw new Exception(s"response size=${e}, failed=${reqUnCached.size}")            
           }
         })
         Future(all)
