@@ -14,6 +14,7 @@ import io.syspulse.skel.Command
 
 import io.syspulse.rpc3._
 import io.syspulse.rpc3.server._
+import akka.http.scaladsl.model.HttpHeader
 
 
 object ProxyRegistry {
@@ -21,7 +22,7 @@ object ProxyRegistry {
 
   implicit val ec: scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.global
     
-  final case class ProxyRpc(req:String,replyTo: ActorRef[Try[String]]) extends Command  
+  final case class ProxyRpc(req:String,headers:Seq[HttpHeader],replyTo: ActorRef[Try[String]]) extends Command  
   
   def apply(store: ProxyStore): Behavior[io.syspulse.skel.Command] = {
     registry(store)
@@ -31,9 +32,9 @@ object ProxyRegistry {
     
     Behaviors.receiveMessage {
 
-      case ProxyRpc(req,replyTo) =>
+      case ProxyRpc(req,headers,replyTo) =>
         
-        val f = store.rpc(req)
+        val f = store.rpc(req,headers)
 
         f.onComplete(r => r match {
           case Success(rsp) => replyTo ! Success(rsp)

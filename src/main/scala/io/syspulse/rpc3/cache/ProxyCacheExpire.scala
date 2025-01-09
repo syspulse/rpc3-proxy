@@ -35,7 +35,7 @@ class ProxyCacheExpire(ttl:Long = 30000L,ttlLatest:Long = 12000L,gcFreq:Long = 1
 
   protected val cache:concurrent.Map[String,CacheRsp] = new ConcurrentHashMap().asScala
 
-  val cron = new CronFreq(() => {
+  val cron = new CronFreq((v0:Long) => {
       //log.info(s"GC: ${cache.size}")
       var nHot = 0
       var nCold = 0
@@ -53,8 +53,8 @@ class ProxyCacheExpire(ttl:Long = 30000L,ttlLatest:Long = 12000L,gcFreq:Long = 1
       log.info(s"GC: size=${sz}: removed=(${nHot},${nCold}), hit=${metricCacheHitCount.get()}, miss=${metricCacheMissCount.get}")
       true
     },
-    FiniteDuration(gcFreq,TimeUnit.MILLISECONDS),
-    delay = gcFreq
+    s"${gcFreq}",
+    gcFreq
   )
         
   cron.start()

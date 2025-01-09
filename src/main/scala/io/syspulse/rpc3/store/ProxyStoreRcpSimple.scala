@@ -33,16 +33,17 @@ import akka.http.scaladsl.model.ContentTypes
 import io.syspulse.rpc3.cache.ProxyCache
 import io.syspulse.rpc3.pool.RpcPool
 import io.syspulse.rpc3.pool.RpcSession
+import akka.http.scaladsl.model.HttpHeader
 
 class ProxyStoreRcpSimple(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
   extends ProxyStoreRcp(pool)(config,cache) {
   
-  def batch(uri:String,req:String,session:RpcSession):Future[String] = {
+  def batch(uri:String,req:String,headers:Seq[HttpHeader],session:RpcSession):Future[String] = {
     val rr = decodeBatch(req)    
     val key = rr.map(r => getKey(r)).mkString("_")
 
     val rsp = cache.find(key) match {
-      case None => http(uri,req)          
+      case None => http(uri,req,headers)          
       case Some(rsp) => Future(rsp)
     }
 

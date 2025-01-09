@@ -42,6 +42,8 @@ case class Config(
   rpcDelay:Long = 1000L,
   rpcFailback:Long = 10000L,
   rpcThrottle:Long = 0L,
+  rpcCompress:String = "",//"deflate,gzip",
+  rpcHeaders:Seq[String] = Seq(),
 
   apiKey:String = "", // suffix to url (api key)
   
@@ -81,6 +83,8 @@ object App extends skel.Server {
         ArgLong('_',"rpc.delay",s"Delay between retry, msec (def: ${d.rpcDelay})"),
         ArgLong('_',"rpc.failback",s"Delay between failback retry (to previously failed node), msec (def: ${d.rpcFailback})"),
         ArgLong('_',"rpc.throttle",s"Delay between Requests, msec (def: ${d.rpcThrottle})"),
+        ArgString('_', "rpc.compress",s"RPC compression. empty is no compress (def: ${d.rpcCompress})"),
+        ArgString('_', "rpc.headers",s"RPC headers (def: ${d.rpcHeaders})"),
 
         ArgString('_', "api.key",s"Cache [none,time://] (def: ${d.cache})"),
         
@@ -113,6 +117,8 @@ object App extends skel.Server {
       rpcDelay = c.getLong("rpc.delay").getOrElse(d.rpcDelay),
       rpcFailback = c.getLong("rpc.failback").getOrElse(d.rpcFailback),
       rpcThrottle = c.getLong("rpc.throttle").getOrElse(d.rpcThrottle),
+      rpcCompress = c.getString("rpc.compress").getOrElse(d.rpcCompress),
+      rpcHeaders = c.getListString("rpc.headers",d.rpcHeaders),
 
       apiKey = c.getString("api.key").getOrElse(d.apiKey),
       

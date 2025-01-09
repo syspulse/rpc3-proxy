@@ -41,6 +41,8 @@ import scala.concurrent.Await
 
 import io.syspulse.rpc3.pool.RpcPool
 import io.syspulse.rpc3.pool.RpcSession
+import akka.http.scaladsl.model.HttpHeader
+import akka.http.scaladsl.model.headers.RawHeader
 
 object Throttler {
   val BGL = new Object()
@@ -141,10 +143,10 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
     }
   }
 
-  def retry(req:String,session:RpcSession)(implicit ec: ExecutionContext, sched: Scheduler): Future[String] = {
+  def retry(req:String,headers:Seq[HttpHeader],session:RpcSession)(implicit ec: ExecutionContext, sched: Scheduler): Future[String] = {
     val uri = session.next()
     
-    val f = rpc1(uri,req,session)
+    val f = rpc1(uri,req,headers,session)
 
     f
     .recoverWith { 
@@ -157,7 +159,7 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
         // switch to another RPC or fail
         log.warn(s"retry(${session.retry},${session.lap}): ${uri}")
         session.failed()
-        akka.pattern.after(FiniteDuration(config.rpcDelay,TimeUnit.MILLISECONDS), sched)(retry(req,session))  
+        akka.pattern.after(FiniteDuration(config.rpcDelay,TimeUnit.MILLISECONDS), sched)(retry(req,headers,session))  
 
       // case e =>
       //   log.warn(s"??? retry(${session.retry},${session.lap}): ${uri}: ${e.getMessage()}")
@@ -166,7 +168,7 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
   }
     
   // --------------------------------------------------------------------------------- Proxy ---
-  def rpc1(uri:String,req:String,session:RpcSession) = {
+  def rpc1(uri:String,req:String,headers:Seq[HttpHeader],session:RpcSession) = {
     log.info(s"${req.take(85)} --> ${uri}")
 
     // throttle here if neccessary
@@ -176,12 +178,12 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
 
       // single request
       case req if(req.startsWith("{")) => 
-        single(uri,req)        
+        single(uri,req,headers)        
       
       // batch
       case req if(req.startsWith("[")) => 
         //batchOptimized(req)
-        batch(uri,req,session)
+        batch(uri,req,headers,session)
         
       case _ => 
         Future {
@@ -209,13 +211,24 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
     // http
   }
 
-  def http(uri:String,req:String) = {                    
-    // val session = session0.getOrElse(pool.connect(req))
-    // retry(req,session)
+  def http(uri:String,req:String,headers:Seq[HttpHeader]) = {                    
+    
+    val request = HttpRequest(
+        HttpMethods.POST, 
+        uri, 
+        headers = headers.filter(h => h.name() != "Timeout-Access") ++ {
+          if(!config.rpcCompress.isBlank())
+            Seq(RawHeader("Content-Encoding", config.rpcCompress))
+          else
+            Seq()
+        },
+        entity = HttpEntity(ContentTypes.`application/json`,req)
+      )
+
+    log.debug(s"request: ${request} -> ${uri}")
 
     lazy val http = Http()
-    .singleRequest(HttpRequest(HttpMethods.POST, uri, entity = HttpEntity(ContentTypes.`application/json`,req)),
-                   settings = retry_deterministic(as,FiniteDuration(config.rpcTimeout,TimeUnit.MILLISECONDS)))
+    .singleRequest(request, settings = retry_deterministic(as,FiniteDuration(config.rpcTimeout,TimeUnit.MILLISECONDS)))
     .flatMap(res => { 
       res.status match {
         case StatusCodes.OK => 
@@ -231,7 +244,7 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
     http
   }
  
-  def single(uri:String,req:String) = {
+  def single(uri:String,req:String,headers:Seq[HttpHeader]) = {
     val r = decodeSingle(req)
     val key = getKey(r)
 
@@ -239,7 +252,7 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
       case None =>         
         // save to cache only on missed 
         for {
-          r0 <- http(uri,req)
+          r0 <- http(uri,req,headers)
           _ <- {            
             if(isError(Some(r0))) {
               log.warn(s"uncache: ${r0}")
@@ -256,12 +269,12 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
     rsp 
   }
 
-  def rpc(req:String) = {
-    log.debug(s"req='${req}'")
+  def rpc(req:String,headers:Seq[HttpHeader]) = {
+    log.debug(s"req='${req}', headers=${headers}")
 
     val session = pool.connect(req)
 
-    retry(req,session)
+    retry(req,headers,session)
     
     // val response = req.trim match {
 
@@ -282,7 +295,7 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
     // response 
   }
 
-  def batch(uri:String,req:String,session:RpcSession):Future[String]
+  def batch(uri:String,req:String,headers:Seq[HttpHeader],session:RpcSession):Future[String]
 
   def isError(res:Option[String]):Boolean = {
     if(! res.isDefined) 

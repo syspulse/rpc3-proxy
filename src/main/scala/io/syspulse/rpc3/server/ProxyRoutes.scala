@@ -72,19 +72,20 @@ class ProxyRoutes(registry: ActorRef[Command])(implicit context: ActorContext[_]
   val metricGetCount: Counter = Counter.build().name("rpc3_get_total").help("Rpc3 gets").register(TelemetryRegistry.registry)
   val metricPostCount: Counter = Counter.build().name("rpc3_post_total").help("Rpc3 posts").register(TelemetryRegistry.registry)
   
-  def rpcProxy(req:String): Future[Try[String]] = registry.ask(ProxyRpc(req,_))
+  def rpcProxy(req:String,headers:Seq[HttpHeader]): Future[Try[String]] = registry.ask(ProxyRpc(req,headers,_))
       
 
   @POST @Path("/") @Consumes(Array(MediaType.APPLICATION_JSON))
   def rpcRoute = post {
-    entity(as[String]) { req =>
-      onSuccess(rpcProxy(req)) { rsp =>
-        metricPostCount.inc()
-        complete(StatusCodes.OK, rsp)
+    extractRequest { request =>
+      entity(as[String]) { req =>        
+        onSuccess(rpcProxy(req,request.headers)) { rsp =>
+          metricPostCount.inc()
+          complete(StatusCodes.OK, rsp)
+        }
       }
     }
   }
-
   
   val corsAllow = CorsSettings(system.classicSystem)
     //.withAllowGenericHttpRequests(true)
@@ -109,16 +110,7 @@ class ProxyRoutes(registry: ActorRef[Command])(implicit context: ActorContext[_]
               )
             else
               reject(AuthorizationFailedRejection)
-
-            // authenticate()(authn =>
-            //   authorize(Permissions.isProxy(UUID(id),authn) || Permissions.isAdmin(authn) || Permissions.isService(authn)) {
-            //     updateProxyRoute(id) ~
-            //     getProxyRoute(id)                 
-            //   } ~
-            //   authorize(Permissions.isAdmin(authn) || Permissions.isService(authn)) {
-            //     deleteProxyRoute(id)
-            //   }
-            // ) 
+            
           }
         }
       )

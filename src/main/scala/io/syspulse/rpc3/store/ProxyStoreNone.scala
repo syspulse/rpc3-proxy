@@ -15,6 +15,7 @@ import scala.concurrent.Future
 import spray.json._
 import io.syspulse.rpc3.server.ProxyRpcReq
 import io.syspulse.rpc3.server.ProxyJson
+import akka.http.scaladsl.model.HttpHeader
 
 class ProxyStoreNone extends ProxyStore {
   val log = Logger(s"${this}")
@@ -23,8 +24,8 @@ class ProxyStoreNone extends ProxyStore {
 
   import ProxyJson._
   
-  def rpc(req:String) = {
-    log.info(s"req='${req}'")
+  def rpc(req:String,headers:Seq[HttpHeader]) = {
+    log.info(s"req='${req}', headers=${headers}")
 
     val request = if(req.trim.startsWith("{")) {
       req.parseJson.convertTo[ProxyRpcReq]

@@ -33,6 +33,7 @@ import akka.http.scaladsl.model.ContentTypes
 import io.syspulse.rpc3.cache.ProxyCache
 import io.syspulse.rpc3.pool.RpcPool
 import io.syspulse.rpc3.pool.RpcSession
+import akka.http.scaladsl.model.HttpHeader
 
 class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) extends ProxyStoreRcp(pool)(config,cache) {
   
@@ -51,7 +52,7 @@ class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
   }
 
 
-  def batch(uri:String,req:String,session:RpcSession):Future[String] = {
+  def batch(uri:String,req:String,headers:Seq[HttpHeader],session:RpcSession):Future[String] = {
     val rr = decodeBatch(req)
         
     // prepare array for response with Cached and UnCached
@@ -82,7 +83,7 @@ class ProxyStoreRcpBatch(pool:RpcPool)(implicit config:Config,cache:ProxyCache) 
     // log.info(s"${reqRpc.take(80)} --> ${uri}")
       
     for {
-      rsp <- http(uri,reqRpc)
+      rsp <- http(uri,reqRpc,headers)
       fresh <- {
         // This step converts from JsonArray[JsonValue] -> Array[String]
         // It is required to have an index into New response assembly and cache
