@@ -2,7 +2,7 @@
 
 Caching Proxy for EVM RPC.
 
-- Proxy understand `batch` requests and can cache individual requests inside the batch
+- Proxy understands `batch` requests and can cache individual requests inside the batch
 
 - Proxy supports `latest` to cache it as `block number`
 
@@ -11,9 +11,11 @@ Caching Proxy for EVM RPC.
    - `cache.latest` : time to live to `latest` block response. Special case which can control how Cache may *lag* behind. It should be generally set to the Block interval (e.g. 12000 for Ethereum)
    - `cache.gc`: Garbage Collection for expired requests
 
-- Multiple RPC nodes Pool:
+- Multiple RPC nodes Pool strategies:
    - __lb__ : load-balancing round-robin with periodic retry of failed
-   - __sticky__: stays on healthy node and does not fail-back
+   - __sticky__: stays on healthy node and do not fail-back
+
+Default pool is __sticky__   
 
 The size of cache is not limited, use `cache.gc` option
 
@@ -35,29 +37,29 @@ curl http://localhost:8080/api/v1/rpc3/1111
 ### Run with cache 12 seconds
 
 ```
-./run-rpc3.sh --pool=http://geth:8545 --cache.ttl=120000
+./run-rpc3.sh --cache.ttl=120000 http://geth:8545
 ```
 
-### Run with 4 Threads pool 
+### Run with 4 Threads pool and gzip compression
 
 ```
-./run-rpc3.sh --pool=http://geth:8545 --proxy.threads=4
+./run-rpc3.sh --rpc.threads=4 --rpc.compress=gzip http://geth:8545
 ```
 
 ### Run with Round-robin load-balancing Nodes Pool
-
 
 ```
 ./run-rpc3.sh --pool=lb://http://geth-1:8545,http://geth-2:8545
 ```
 
-It is possible to specify rpc nodes as free arguments:
+It is possible to specify rpc nodes as free arguments
 
 ```
 ./run-rpc3.sh --pool=lb:// http://geth-1 http://reth-2 http://node-3
 ```
 
 
+----
 
 ### Testing fail-over scenario
 
