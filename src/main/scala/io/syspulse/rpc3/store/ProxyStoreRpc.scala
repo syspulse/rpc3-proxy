@@ -43,6 +43,9 @@ import io.syspulse.rpc3.pool.RpcPool
 import io.syspulse.rpc3.pool.RpcSession
 import akka.http.scaladsl.model.HttpHeader
 import akka.http.scaladsl.model.headers.RawHeader
+import akka.http.scaladsl.model.HttpResponse
+import akka.http.scaladsl.model.headers.HttpEncodings
+import akka.http.scaladsl.coding.Coders
 
 object Throttler {
   val BGL = new Object()
@@ -211,14 +214,32 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
     // http
   }
 
+  def decodeResponse(response: HttpResponse): HttpResponse = {
+    log.debug(s"response: ${response.status},${response.encoding},${response.headers},${response.entity.contentLengthOption}")
+    val decoder = response.encoding match {
+      case HttpEncodings.gzip =>
+        Coders.Gzip
+      case HttpEncodings.deflate =>
+        Coders.Deflate
+      case HttpEncodings.identity =>
+        Coders.NoCoding
+      case other =>
+        log.warn(s"Unknown encoding: $other")
+        Coders.NoCoding
+    }
+
+    decoder.decodeMessage(response)
+  }
+
   def http(uri:String,req:String,headers:Seq[HttpHeader]) = {                    
-    
     val request = HttpRequest(
         HttpMethods.POST, 
-        uri, 
-        headers = headers.filter(h => h.name() != "Timeout-Access") ++ {
+        uri,
+        // for some reason, Host head is empty here, QuickNode RPC rejects it with 401
+        headers = headers.filter(h => h.name() != "Timeout-Access" && h.name() != "Host") ++ 
+        {
           if(!config.rpcCompress.isBlank())
-            Seq(RawHeader("Content-Encoding", config.rpcCompress))
+            Seq(RawHeader("Accept-Encoding", config.rpcCompress))
           else
             Seq()
         },
@@ -229,16 +250,26 @@ abstract class ProxyStoreRcp(pool:RpcPool)(implicit config:Config,cache:ProxyCac
 
     lazy val http = Http()
     .singleRequest(request, settings = retry_deterministic(as,FiniteDuration(config.rpcTimeout,TimeUnit.MILLISECONDS)))
+    .map(decodeResponse)
     .flatMap(res => { 
       res.status match {
         case StatusCodes.OK => 
           val body = res.entity.dataBytes.runReduce(_ ++ _)
-          body.map(_.utf8String)
+          body.map(d => {
+            val data = d.utf8String
+            log.debug(s"response: '${data}'")
+            data
+          })
         case _ =>
-          log.error(s"RPC error: ${res.status}")
+          //log.error(s"RPC error: ${res.status}")
           val body = res.entity.dataBytes.runReduce(_ ++ _)
-          val txt = Await.result(body.map(_.utf8String),FiniteDuration(5000L,TimeUnit.MILLISECONDS))
-          throw new Exception(s"${res.status}: ${txt}")
+          //val txt = Await.result(body.map(_.utf8String),FiniteDuration(5000L,TimeUnit.MILLISECONDS))
+          body.map(d => {
+            val data = d.utf8String
+            log.warn(s"RPC response: ${res.status}: '${data}'")
+            throw new Exception(s"${res.status}: ${data}")
+          })
+          //throw new Exception(s"${res.status}: ${txt}")
       }
     })
     http
